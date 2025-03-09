@@ -10,19 +10,19 @@ import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, Check, X } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
-type Message = {
-  id: number;
-  senderId: number;
-  receiverId: number;
-  message: string;
-  timestamp: string;
-  bookId?: number;
+type ChatRoom = {
+  userId: number;
+  username: string;
+  lastMessage?: string;
+  unreadCount: number;
 };
 
 export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeChat, setActiveChat] = useState<number | null>(null);
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [messages, setMessages] = useState<Chat[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,9 +82,36 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (chats) {
-      setMessages(chats);
+      // Group chats by user to create chat rooms
+      const rooms = new Map<number, ChatRoom>();
+      chats.forEach(chat => {
+        const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
+        if (!rooms.has(otherUserId)) {
+          rooms.set(otherUserId, {
+            userId: otherUserId,
+            username: `User #${otherUserId}`, // Will be updated with actual username
+            lastMessage: chat.message,
+            unreadCount: 0
+          });
+        } else {
+          const room = rooms.get(otherUserId)!;
+          room.lastMessage = chat.message;
+        }
+      });
+      setChatRooms(Array.from(rooms.values()));
     }
-  }, [chats]);
+  }, [chats, user?.id]);
+
+  useEffect(() => {
+    if (activeChat && chats) {
+      // Filter messages for active chat
+      const activeMessages = chats.filter(chat => 
+        (chat.senderId === user?.id && chat.receiverId === activeChat) ||
+        (chat.receiverId === user?.id && chat.senderId === activeChat)
+      );
+      setMessages(activeMessages);
+    }
+  }, [activeChat, chats, user?.id]);
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -92,8 +119,28 @@ export default function ChatPage() {
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      setMessages(prev => [...prev, message]);
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'CREDIT_UPDATE' && data.userId === user?.id) {
+        // Update user credits in real-time
+        queryClient.setQueryData(["/api/user"], (oldData: any) => ({
+          ...oldData,
+          credits: data.credits
+        }));
+      } else if (data.type === 'CHAT_MESSAGE') {
+        // Handle new chat message
+        const chat = data.chat;
+        setMessages(prev => [...prev, chat]);
+        if (data.bookTitle) {
+          toast({
+            title: "New Message",
+            description: `Regarding book: ${data.bookTitle}`,
+          });
+        }
+      } else {
+        // Handle regular chat message
+        setMessages(prev => [...prev, data]);
+      }
     };
 
     wsRef.current.onerror = () => {
@@ -107,7 +154,7 @@ export default function ChatPage() {
     return () => {
       wsRef.current?.close();
     };
-  }, []);
+  }, [user?.id, toast]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -116,13 +163,13 @@ export default function ChatPage() {
   }, [messages]);
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !wsRef.current) return;
+    if (!newMessage.trim() || !wsRef.current || !activeChat) return;
 
     const message = {
       senderId: user!.id,
-      receiverId: books![0].ownerId === user!.id ? books![0].borrowerId! : books![0].ownerId,
+      receiverId: activeChat,
       message: newMessage,
-      bookId: books![0].id,
+      timestamp: new Date().toISOString()
     };
 
     wsRef.current.send(JSON.stringify(message));
@@ -145,7 +192,7 @@ export default function ChatPage() {
     <div className="container mx-auto px-4 py-8">
       <Card className="h-[calc(100vh-8rem)]">
         <CardHeader>
-          <CardTitle>Chat</CardTitle>
+          <CardTitle>Messages</CardTitle>
           {pendingRequests && pendingRequests.length > 0 && (
             <div className="space-y-4 mt-4 bg-muted p-4 rounded-lg">
               <h3 className="font-semibold">Pending Borrow Requests</h3>
@@ -183,41 +230,72 @@ export default function ChatPage() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="flex flex-col h-full">
-          <ScrollArea ref={scrollRef} className="flex-1 pr-4">
-            <div className="space-y-4">
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.senderId === user!.id ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                      msg.senderId === user!.id
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
-                  >
-                    <p className="text-sm">{msg.message}</p>
-                    <span className="text-xs opacity-70">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </span>
+        <CardContent className="flex h-full gap-4">
+          {/* Chat rooms list */}
+          <div className="w-64 border-r">
+            {chatRooms.map(room => (
+              <div
+                key={room.userId}
+                className={`p-3 cursor-pointer hover:bg-accent ${
+                  activeChat === room.userId ? 'bg-accent' : ''
+                }`}
+                onClick={() => setActiveChat(room.userId)}
+              >
+                <div className="font-medium">{room.username}</div>
+                {room.lastMessage && (
+                  <div className="text-sm text-muted-foreground truncate">
+                    {room.lastMessage}
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                )}
+              </div>
+            ))}
+          </div>
 
-          <div className="flex items-center space-x-2 mt-4">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-              onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-            />
-            <Button onClick={sendMessage} disabled={!newMessage.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
+          {/* Chat messages */}
+          <div className="flex-1 flex flex-col">
+            {activeChat ? (
+              <>
+                <ScrollArea ref={scrollRef} className="flex-1 pr-4">
+                  <div className="space-y-4">
+                    {messages.map((msg, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${msg.senderId === user!.id ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                            msg.senderId === user!.id
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          }`}
+                        >
+                          <p className="text-sm">{msg.message}</p>
+                          <span className="text-xs opacity-70">
+                            {new Date(msg.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <div className="flex items-center space-x-2 mt-4">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                  />
+                  <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select a chat to start messaging
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -15,6 +15,18 @@ export const users = pgTable("users", {
   }>(),
 });
 
+// Enhanced validation for user registration
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    email: true,
+    password: true,
+  })
+  .extend({
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(6, "Password must be at least 6 characters long"),
+  });
+
 export const books = pgTable("books", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -46,12 +58,6 @@ export const chats = pgTable("chats", {
   message: text("message").notNull(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
   bookId: integer("book_id"),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  email: true,
-  password: true,
 });
 
 export const insertBookSchema = createInsertSchema(books).omit({

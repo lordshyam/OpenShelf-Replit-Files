@@ -38,6 +38,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json(result.error);
     }
 
+    // Check for duplicate books
+    const existingBooks = await storage.getBooks();
+    const isDuplicate = existingBooks.some(book =>
+      book.ownerId === req.user!.id &&
+      book.title.toLowerCase() === result.data.title.toLowerCase() &&
+      book.author.toLowerCase() === result.data.author.toLowerCase()
+    );
+
+    if (isDuplicate) {
+      return res.status(400).json({ message: "You have already listed this book" });
+    }
+
     const book = await storage.createBook({
       ...result.data,
       ownerId: req.user!.id,
@@ -45,6 +57,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Add 0.5 credits for listing book
     await storage.updateUserCredits(req.user!.id, req.user!.credits + 0.5);
+
+    // Broadcast credit update through WebSocket
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'CREDIT_UPDATE',
+          userId: req.user!.id,
+          credits: req.user!.credits + 0.5
+        }));
+      }
+    });
 
     res.status(201).json(book);
   });
@@ -118,23 +141,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       borrowDeadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks
     });
 
-    // Deduct credits from borrower
+    // Deduct credits from borrower and broadcast update
     const borrower = await storage.getUser(request.requesterId);
     if (borrower) {
-      await storage.updateUserCredits(borrower.id, borrower.credits - 1);
+      const newCredits = borrower.credits - 1;
+      await storage.updateUserCredits(borrower.id, newCredits);
+
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'CREDIT_UPDATE',
+            userId: borrower.id,
+            credits: newCredits
+          }));
+        }
+      });
     }
 
-    // Notify the borrower through chat
+    // Create a private chat room and notify both users
     const chat = await storage.createChat({
       senderId: req.user!.id,
       receiverId: request.requesterId,
-      message: `Your request to borrow "${book.title}" has been accepted!`,
+      message: `Your request to borrow "${book.title}" has been accepted! You can now chat here.`,
       bookId: book.id,
     });
 
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(chat));
+        client.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          chat,
+          bookTitle: book.title
+        }));
       }
     });
 

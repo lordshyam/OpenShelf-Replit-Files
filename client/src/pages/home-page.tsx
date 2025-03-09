@@ -115,7 +115,7 @@ export default function HomePage() {
               <CardFooter>
                 <Button 
                   className="w-full"
-                  disabled={user?.credits < 1}
+                  disabled={user?.credits < 1 || book.ownerId === user?.id}
                   onClick={() => {
                     if (user?.credits < 1) {
                       toast({
@@ -126,7 +126,16 @@ export default function HomePage() {
                       return;
                     }
 
-                    // Create a borrow request instead of immediate borrowing
+                    if (book.ownerId === user?.id) {
+                      toast({
+                        title: "Cannot borrow own book",
+                        description: "You cannot borrow books that you have listed.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    // Create a borrow request
                     fetch(`/api/books/${book.id}/borrow`, { 
                       method: 'POST',
                       credentials: 'include',
@@ -147,7 +156,7 @@ export default function HomePage() {
                       });
                   }}
                 >
-                  Borrow Book
+                  {book.ownerId === user?.id ? "Your Book" : "Borrow Book"}
                 </Button>
               </CardFooter>
             </Card>
