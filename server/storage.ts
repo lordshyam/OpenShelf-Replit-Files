@@ -1,4 +1,4 @@
-import { User, Book, Chat, InsertUser, InsertBook, InsertChat, UserPreferences } from "@shared/schema";
+import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 
@@ -11,7 +11,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserCredits(userId: number, credits: number): Promise<void>;
   updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void>;
-  
+
   // Book operations
   getBooks(): Promise<Book[]>;
   getBooksByOwner(ownerId: number): Promise<Book[]>;
@@ -19,11 +19,16 @@ export interface IStorage {
   createBook(book: InsertBook): Promise<Book>;
   updateBook(id: number, updates: Partial<Book>): Promise<Book>;
   deleteBook(id: number): Promise<void>;
-  
+
+  // Borrow request operations
+  getBorrowRequests(userId: number): Promise<BorrowRequest[]>;
+  createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest>;
+  updateBorrowRequest(id: number, status: string): Promise<void>;
+
   // Chat operations
   getChats(userId: number): Promise<Chat[]>;
   createChat(chat: InsertChat): Promise<Chat>;
-  
+
   sessionStore: session.SessionStore;
 }
 
@@ -31,6 +36,7 @@ export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private books: Map<number, Book>;
   private chats: Map<number, Chat>;
+  private borrowRequests: Map<number, BorrowRequest>;
   private currentId: number;
   sessionStore: session.SessionStore;
 
@@ -38,6 +44,7 @@ export class MemStorage implements IStorage {
     this.users = new Map();
     this.books = new Map();
     this.chats = new Map();
+    this.borrowRequests = new Map();
     this.currentId = 1;
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
@@ -115,6 +122,34 @@ export class MemStorage implements IStorage {
 
   async deleteBook(id: number): Promise<void> {
     this.books.delete(id);
+  }
+
+  async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
+    return Array.from(this.borrowRequests.values()).filter(
+      (req) => {
+        const book = this.books.get(req.bookId);
+        return book && (book.ownerId === userId || req.requesterId === userId);
+      }
+    );
+  }
+
+  async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
+    const id = this.currentId++;
+    const borrowRequest: BorrowRequest = {
+      ...request,
+      id,
+      status: "pending",
+      createdAt: new Date(),
+    };
+    this.borrowRequests.set(id, borrowRequest);
+    return borrowRequest;
+  }
+
+  async updateBorrowRequest(id: number, status: string): Promise<void> {
+    const request = this.borrowRequests.get(id);
+    if (!request) throw new Error("Borrow request not found");
+    request.status = status;
+    this.borrowRequests.set(id, request);
   }
 
   async getChats(userId: number): Promise<Chat[]> {

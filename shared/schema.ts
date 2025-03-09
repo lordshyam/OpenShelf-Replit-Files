@@ -31,6 +31,14 @@ export const books = pgTable("books", {
   donated: boolean("donated").default(false),
 });
 
+export const borrowRequests = pgTable("borrowRequests", {
+  id: serial("id").primaryKey(),
+  bookId: integer("book_id").notNull(),
+  requesterId: integer("requester_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending, accepted, declined
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const chats = pgTable("chats", {
   id: serial("id").primaryKey(),
   senderId: integer("sender_id").notNull(),
@@ -52,6 +60,12 @@ export const insertBookSchema = createInsertSchema(books).omit({
   borrowerId: true,
   borrowDeadline: true,
   donated: true,
+});
+
+export const insertBorrowRequestSchema = createInsertSchema(borrowRequests).omit({
+  id: true,
+  status: true,
+  createdAt: true,
 });
 
 export const insertChatSchema = createInsertSchema(chats).omit({
@@ -91,8 +105,10 @@ export const bookGenres = [
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertBook = z.infer<typeof insertBookSchema>;
+export type InsertBorrowRequest = z.infer<typeof insertBorrowRequestSchema>;
 export type InsertChat = z.infer<typeof insertChatSchema>;
 export type User = typeof users.$inferSelect;
 export type Book = typeof books.$inferSelect;
+export type BorrowRequest = typeof borrowRequests.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;

@@ -4,7 +4,6 @@ import { WebSocketServer } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertBookSchema, userPreferencesSchema } from "@shared/schema";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -50,6 +49,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(book);
   });
 
+  // Borrow requests
+  app.get("/api/borrow-requests", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const requests = await storage.getBorrowRequests(req.user!.id);
+    res.json(requests);
+  });
+
   app.post("/api/books/:id/borrow", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -62,34 +68,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (book.borrowed) return res.status(400).send("Book already borrowed");
     if (req.user!.credits < 1) return res.status(400).send("Insufficient credits");
 
-    await storage.updateBook(bookId, {
+    // Create a borrow request instead of immediately borrowing
+    const request = await storage.createBorrowRequest({
+      bookId,
+      requesterId: req.user!.id,
+    });
+
+    // Send a chat message to the book owner
+    const chat = await storage.createChat({
+      senderId: req.user!.id,
+      receiverId: book.ownerId,
+      message: `I would like to borrow "${book.title}". Please review my request.`,
+      bookId,
+    });
+
+    // Broadcast the chat message to connected clients
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(chat));
+      }
+    });
+
+    res.status(201).json(request);
+  });
+
+  app.post("/api/borrow-requests/:id/accept", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const requestId = parseInt(req.params.id);
+    const request = (await storage.getBorrowRequests(req.user!.id))
+      .find(r => r.id === requestId);
+
+    if (!request) return res.status(404).send("Request not found");
+
+    const book = await storage.getBooks().then(books =>
+      books.find(b => b.id === request.bookId)
+    );
+
+    if (!book) return res.status(404).send("Book not found");
+    if (book.ownerId !== req.user!.id) return res.status(403).send("Not your book");
+
+    // Update the request status
+    await storage.updateBorrowRequest(requestId, "accepted");
+
+    // Update the book status
+    await storage.updateBook(book.id, {
       borrowed: true,
-      borrowerId: req.user!.id,
+      borrowerId: request.requesterId,
       borrowDeadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks
     });
 
-    // Deduct 1 credit for borrowing
-    await storage.updateUserCredits(req.user!.id, req.user!.credits - 1);
+    // Deduct credits from borrower
+    const borrower = await storage.getUser(request.requesterId);
+    if (borrower) {
+      await storage.updateUserCredits(borrower.id, borrower.credits - 1);
+    }
+
+    // Notify the borrower through chat
+    const chat = await storage.createChat({
+      senderId: req.user!.id,
+      receiverId: request.requesterId,
+      message: `Your request to borrow "${book.title}" has been accepted!`,
+      bookId: book.id,
+    });
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(chat));
+      }
+    });
 
     res.sendStatus(200);
   });
 
-  app.post("/api/books/:id/return", async (req, res) => {
+  app.post("/api/borrow-requests/:id/decline", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    const bookId = parseInt(req.params.id);
+    const requestId = parseInt(req.params.id);
+    const request = (await storage.getBorrowRequests(req.user!.id))
+      .find(r => r.id === requestId);
+
+    if (!request) return res.status(404).send("Request not found");
+
     const book = await storage.getBooks().then(books =>
-      books.find(b => b.id === bookId)
+      books.find(b => b.id === request.bookId)
     );
 
     if (!book) return res.status(404).send("Book not found");
-    if (!book.borrowed) return res.status(400).send("Book not borrowed");
     if (book.ownerId !== req.user!.id) return res.status(403).send("Not your book");
 
-    await storage.updateBook(bookId, {
-      borrowed: false,
-      borrowerId: null,
-      borrowDeadline: null,
+    // Update the request status
+    await storage.updateBorrowRequest(requestId, "declined");
+
+    // Notify the borrower through chat
+    const chat = await storage.createChat({
+      senderId: req.user!.id,
+      receiverId: request.requesterId,
+      message: `Your request to borrow "${book.title}" has been declined.`,
+      bookId: book.id,
+    });
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(chat));
+      }
     });
 
     res.sendStatus(200);

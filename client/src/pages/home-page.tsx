@@ -125,17 +125,22 @@ export default function HomePage() {
                       });
                       return;
                     }
-                    fetch(`/api/books/${book.id}/borrow`, { method: 'POST' })
+
+                    // Create a borrow request instead of immediate borrowing
+                    fetch(`/api/books/${book.id}/borrow`, { 
+                      method: 'POST',
+                      credentials: 'include',
+                    })
                       .then(res => {
-                        if (!res.ok) throw new Error("Failed to borrow book");
+                        if (!res.ok) throw new Error("Failed to create borrow request");
                         toast({
                           title: "Success",
-                          description: "Book borrowed successfully",
+                          description: "Borrow request sent to the owner",
                         });
                       })
                       .catch(err => {
                         toast({
-                          title: "Error borrowing book",
+                          title: "Error creating borrow request",
                           description: err.message,
                           variant: "destructive",
                         });
