@@ -7,14 +7,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Chat, BorrowRequest, type Book } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, Check, X } from "lucide-react";
+import { Send, Loader2, Check, X, BookOpen } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
 type ChatRoom = {
   userId: number;
   username: string;
   lastMessage?: string;
-  unreadCount: number;
+  bookId?: number;
+  bookTitle?: string;
 };
 
 export default function ChatPage() {
@@ -46,9 +47,10 @@ export default function ChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
       toast({
         title: "Success",
-        description: "Borrow request accepted",
+        description: "Borrow request accepted. You can now chat with the borrower.",
       });
     },
     onError: (error: Error) => {
@@ -81,30 +83,36 @@ export default function ChatPage() {
   });
 
   useEffect(() => {
-    if (chats) {
-      // Group chats by user to create chat rooms
+    if (chats && books) {
+      // Group chats by user and associate with books
       const rooms = new Map<number, ChatRoom>();
       chats.forEach(chat => {
         const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
+        const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
+
         if (!rooms.has(otherUserId)) {
           rooms.set(otherUserId, {
             userId: otherUserId,
-            username: `User #${otherUserId}`, // Will be updated with actual username
+            username: `User #${otherUserId}`,
             lastMessage: chat.message,
-            unreadCount: 0
+            bookId: chat.bookId,
+            bookTitle: book?.title
           });
         } else {
           const room = rooms.get(otherUserId)!;
           room.lastMessage = chat.message;
+          if (!room.bookId && chat.bookId) {
+            room.bookId = chat.bookId;
+            room.bookTitle = book?.title;
+          }
         }
       });
       setChatRooms(Array.from(rooms.values()));
     }
-  }, [chats, user?.id]);
+  }, [chats, books, user?.id]);
 
   useEffect(() => {
     if (activeChat && chats) {
-      // Filter messages for active chat
       const activeMessages = chats.filter(chat => 
         (chat.senderId === user?.id && chat.receiverId === activeChat) ||
         (chat.receiverId === user?.id && chat.senderId === activeChat)
@@ -122,15 +130,12 @@ export default function ChatPage() {
       const data = JSON.parse(event.data);
 
       if (data.type === 'CREDIT_UPDATE' && data.userId === user?.id) {
-        // Update user credits in real-time
         queryClient.setQueryData(["/api/user"], (oldData: any) => ({
           ...oldData,
           credits: data.credits
         }));
       } else if (data.type === 'CHAT_MESSAGE') {
-        // Handle new chat message
-        const chat = data.chat;
-        setMessages(prev => [...prev, chat]);
+        queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
         if (data.bookTitle) {
           toast({
             title: "New Message",
@@ -138,7 +143,6 @@ export default function ChatPage() {
           });
         }
       } else {
-        // Handle regular chat message
         setMessages(prev => [...prev, data]);
       }
     };
@@ -169,6 +173,7 @@ export default function ChatPage() {
       senderId: user!.id,
       receiverId: activeChat,
       message: newMessage,
+      bookId: chatRooms.find(room => room.userId === activeChat)?.bookId,
       timestamp: new Date().toISOString()
     };
 
@@ -242,6 +247,12 @@ export default function ChatPage() {
                 onClick={() => setActiveChat(room.userId)}
               >
                 <div className="font-medium">{room.username}</div>
+                {room.bookTitle && (
+                  <div className="flex items-center text-xs text-primary gap-1 mb-1">
+                    <BookOpen className="h-3 w-3" />
+                    <span>{room.bookTitle}</span>
+                  </div>
+                )}
                 {room.lastMessage && (
                   <div className="text-sm text-muted-foreground truncate">
                     {room.lastMessage}
