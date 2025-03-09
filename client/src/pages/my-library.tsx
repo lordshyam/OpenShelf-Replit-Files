@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,12 +19,13 @@ export default function MyLibrary() {
   const { toast } = useToast();
 
   const form = useForm<InsertBook>({
-    resolver: zodResolver(insertBookSchema.omit({ location: true })),
+    resolver: zodResolver(insertBookSchema),
     defaultValues: {
       title: "",
       author: "",
       description: "",
       condition: "good",
+      ownerId: user?.id
     },
   });
 
@@ -39,14 +40,14 @@ export default function MyLibrary() {
   });
 
   const addBookMutation = useMutation({
-    mutationFn: async (book: InsertBook) => {
-      const res = await apiRequest("POST", "/api/books", book);
+    mutationFn: async (bookData: InsertBook) => {
+      const res = await apiRequest("POST", "/api/books", bookData);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
       toast({
-        title: "Success",
+        title: "Success!",
         description: "Book added successfully! You earned 0.5 credits.",
       });
       form.reset();
@@ -84,7 +85,7 @@ export default function MyLibrary() {
               <DialogTitle>Add a New Book</DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate({ ...data, location: 'N/A' }))} className="space-y-4">
+              <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="title"
@@ -94,6 +95,7 @@ export default function MyLibrary() {
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -106,6 +108,7 @@ export default function MyLibrary() {
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -118,6 +121,7 @@ export default function MyLibrary() {
                       <FormControl>
                         <Textarea {...field} />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -130,6 +134,7 @@ export default function MyLibrary() {
                       <FormControl>
                         <Input {...field} placeholder="e.g. like new, good, fair" />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -191,16 +196,6 @@ export default function MyLibrary() {
                     <span>Due {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
                   </div>
                 </CardContent>
-                <CardFooter>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => returnBookMutation.mutate(book.id)}
-                    loading={returnBookMutation.isPending}
-                  >
-                    Return Book
-                  </Button>
-                </CardFooter>
               </Card>
             ))}
           </div>
