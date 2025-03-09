@@ -1,0 +1,104 @@
+Virtual Library App - Functional Specification Document
+1. Introduction
+1.1 Purpose
+The Virtual Library App is a community-driven book-sharing platform where users can list, borrow, and donate books. It enhances accessibility to books within local communities, while also offering a credit-based system for book borrowing.
+1.2 Key Features
+● Personalized recommendations based on user preferences.
+● Borrowing system with a request and approval process.
+● Auto-populated book listings using a book database.
+● Group chats for apartment book clubs and communities.
+● Credit-based system with subscription plans for borrowing.
+2. User Flow & App Pages
+2.1 Onboarding (First Time Users)
+Purpose: Collect user preferences and register them. Steps:
+1. Welcome Screen – Introduction to the app.
+2. Preference Form – Users fill out:
+○ Favorite genre(s)
+○ Preferred book format (fiction/non-fiction, self-help, academic, etc.)
+○ Languages they read in
+○ Other questions to personalise their experience
+3. Registration Page – Sign up via email/phone number.
+After completing registration, users are redirected to the Home Page.
+2.2 Home Page
+Purpose: Displays recommended books and allows searching. Features:
+● Below profile: App logo.
+● Top: User profile & credit balance.
+● Search Button: Find books by title, author, or genre.
+● Recommended Books: Based on user preferences and books nearby.
+● Previously Borrowed Books: Quick access to books user has borrowed before.
+● When you click on a book u listed in ‘my library's u should be able to delete it, from the listing.
+At the center there are buttons through which, users can switch between:
+1. Home (default)
+2. My Library
+3. Chats
+2.3 My Library Page
+Purpose: Shows books the user has listed, borrowed, and lent out. Sections:
+● Borrowed Books: Books the user currently has.
+○ 📌 Plus button: Add a book to borrow.
+● Listed Books: Books the user has listed for others to borrow.
+○ 📌 Plus button: Add a book to list.
+● Borrowed from You: Books others have borrowed from the user.
+🔹 Donate Option: If a user wants to permanently donate a book they listed, they can click on one of the books they have listed, when they do this they can see all the details about their book (author, blurb), over here they can also find a button for donation
+2.4 Chat Page
+Purpose: Facilitates communication between users and book clubs. Features:
+● Private Chats: Conversations with users they are borrowing from or lending to.
+● Group Chats: Apartment groups, book clubs, or discussion forums.
+● Communities like schools and apartments should be able to easily integrate the app with their community ( a group where people can borrow books within a community)
+📌 Message Restrictions: If the user has no credits, they can’t send messages but can still view books. (Minimum 1 credit to be able to chat)
+2.5 Book Search & Borrowing Flow
+Purpose: Allows users to find books and request to borrow. Steps:
+1. Search for a Book
+2. Click on a book to see:
+○ Title, author, language, condition, and multiple images.
+○ Availability status (Available/Borrowed).
+○ Borrow request button.
+○ How many km away from you
+3. Request to Borrow – Sends a message to the book owner, with accept or decline options
+4. Only 1 book can be borrowed at one time by a user. Once that book is returned the next book can be borrowed
+5. Owner Accepts/Deny Request
+○ If accepted, the book is unlisted.
+○ Borrower and owner can then talk and arrange a way to exchange the books
+6. Return Policy
+○ The owner can set return deadlines (1 week, 2 weeks, or open-ended).
+○ Once book is returned, owner can go to ‘my library', click on the book that was returned in the ‘lent’ section, and click a button that confirms that the book has been returned.
+📌 Book Location Display: Only shows distance (e.g., 2 km away), not exact address until after approval.
+2.6 Credit & Subscription System
+Purpose: Limits book requests and messages based on user plan. Free Plan: 1 credit/month (can borrow 1 book). Paid Plans: More credits per month with extra features.
+Features:
+● Credits Counter (next to profile picture)
+● If credits run out: Users can’t request books or message others.
+● Upgrade Plan Option: Allows users to subscribe for more credits.
+● If the user lists 1 book they get half a credit, if they list 2 they get 1 credit, and so on. This encourages users to list books and grow the community
+2.7 Listing a Book
+Purpose: Users can add books to lend.
+Steps:
+1. Click “Add Book” (📌 Plus Button in My Library).
+2. Search for the Book Name
+○ If the book exists in the database, it auto-populates:
+■ Title, author, genre, language, cover image, etc.
+○ If the book doesn’t exist, the user manually adds:
+■ Title, author, language, description, images (front & back cover).
+3. Click Submit to list the book.
+4. If the book has any defects it should be appropriately mentioned while listing the book.
+5. For every book listed you get 0.5 credits.
+6.
+📌 Book Auto-Population System: If a book is added manually, it becomes available for future users to select.
+3. Technical Requirements
+3.1 Book Database ( or whatever method is suitable for this function)
+● API or internal database storing book details.
+● Auto-fills book information when listing a book.
+● Allows manual entry for books not in the database.
+3.2 Borrowing & Chat System
+● Request-to-borrow feature.
+● Chat restrictions based on credits. If you have less than 1 credit you cannot send messages to anyone.
+● Automatic book unlisting when borrowed. (Book will be shown as currently borrowed by someone else, please wait for some time to borrow this book)
+3.3 Subscription System
+● Free plan offers 1 credit a month(maybe 0.5, or 0 credits on free plan, so that users will be made to work their way towards 1 credit by listing books)
+● Payed plan offers 3-5 credits per month
+● Payment gateway for paid plans.
+4. Summary & Next Steps
+This document outlines the app's core structure, flow, and features. The next steps for development:
+1. When the app is first launched, there will be no payed plan, and everyone will get 1 credit. To get more they will have to list their own books, this ensures that the community and number of books available on the app will be constantly growing.
+
+
+this is all the text from the document, does it make sense?
