@@ -5,13 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertBookSchema, type InsertBook, type Book } from "@shared/schema";
+import { insertBookSchema, type InsertBook, type Book, bookGenres } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, BookOpen, Clock, Loader2 } from "lucide-react";
+import { Plus, BookOpen, Clock, Loader2, Library, Upload } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
 export default function MyLibrary() {
@@ -25,6 +26,7 @@ export default function MyLibrary() {
       author: "",
       description: "",
       condition: "good",
+      genre: "Fiction",
       ownerId: user?.id
     },
   });
@@ -70,137 +72,203 @@ export default function MyLibrary() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">My Library</h1>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Book
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add a New Book</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="author"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Author</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="condition"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Condition</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g. like new, good, fair" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>
-                  {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
+    <div className="min-h-screen bg-background">
+      <section className="bg-primary text-primary-foreground py-8">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Library className="h-8 w-8" />
+              <h1 className="text-3xl font-bold">My Library</h1>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="secondary">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Book
                 </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Add a New Book</DialogTitle>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="author"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Author</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="genre"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Genre</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a genre" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {bookGenres.map((genre) => (
+                                <SelectItem key={genre} value={genre}>
+                                  {genre}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="condition"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Condition</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g. like new, good, fair" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="imageUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Book Image URL</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="url" placeholder="https://example.com/book-image.jpg" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>
+                      {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
+                    </Button>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </section>
 
-      <Tabs defaultValue="listed" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="listed">Listed Books</TabsTrigger>
-          <TabsTrigger value="borrowed">Borrowed Books</TabsTrigger>
-        </TabsList>
+      <div className="container mx-auto px-4 py-8">
+        <Tabs defaultValue="listed" className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2 bg-primary/5">
+            <TabsTrigger value="listed" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Listed Books
+            </TabsTrigger>
+            <TabsTrigger value="borrowed" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Borrowed Books
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="listed">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {myBooks?.map(book => (
-              <Card key={book.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BookOpen className="h-5 w-5 text-primary" />
-                    <span>{book.title}</span>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{book.author}</p>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm">{book.description}</p>
-                  {book.borrowed && (
+          <TabsContent value="listed">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myBooks?.map(book => (
+                <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  {book.imageUrl && (
+                    <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
+                  )}
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      <span>{book.title}</span>
+                    </CardTitle>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">{book.author}</p>
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        {book.genre}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm">{book.description}</p>
+                    {book.borrowed && (
+                      <div className="mt-2 flex items-center text-sm text-muted-foreground">
+                        <Clock className="mr-1 h-4 w-4" />
+                        <span>Borrowed until {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="borrowed">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {borrowedBooks?.map(book => (
+                <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  {book.imageUrl && (
+                    <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
+                  )}
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      <span>{book.title}</span>
+                    </CardTitle>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">{book.author}</p>
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        {book.genre}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm">{book.description}</p>
                     <div className="mt-2 flex items-center text-sm text-muted-foreground">
                       <Clock className="mr-1 h-4 w-4" />
-                      <span>Borrowed until {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
+                      <span>Due {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="borrowed">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {borrowedBooks?.map(book => (
-              <Card key={book.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BookOpen className="h-5 w-5 text-primary" />
-                    <span>{book.title}</span>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{book.author}</p>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm">{book.description}</p>
-                  <div className="mt-2 flex items-center text-sm text-muted-foreground">
-                    <Clock className="mr-1 h-4 w-4" />
-                    <span>Due {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

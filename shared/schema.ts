@@ -26,6 +26,8 @@ export const books = pgTable("books", {
   borrowerId: integer("borrower_id"),
   borrowDeadline: timestamp("borrow_deadline"),
   condition: text("condition"),
+  genre: text("genre").notNull(),
+  imageUrl: text("image_url"),
   donated: boolean("donated").default(false),
 });
 
@@ -62,6 +64,30 @@ export const userPreferencesSchema = z.object({
   formats: z.array(z.string()),
   languages: z.array(z.string()),
 });
+
+// Available book genres
+export const bookGenres = [
+  "Fiction",
+  "Non-Fiction",
+  "Mystery",
+  "Science Fiction",
+  "Fantasy",
+  "Romance",
+  "Thriller",
+  "Horror",
+  "Biography",
+  "History",
+  "Science",
+  "Technology",
+  "Self-Help",
+  "Children's",
+  "Young Adult",
+  "Poetry",
+  "Drama",
+  "Religion",
+  "Philosophy",
+  "Art",
+] as const;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertBook = z.infer<typeof insertBookSchema>;
