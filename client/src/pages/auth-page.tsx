@@ -14,20 +14,19 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Redirect if already logged in
   if (user) {
     setLocation("/");
     return null;
   }
 
   const loginForm = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema),
+    resolver: zodResolver(insertUserSchema.omit({ email: true })),
     defaultValues: { username: "", password: "" },
   });
 
   const registerForm = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
-    defaultValues: { username: "", password: "" },
+    defaultValues: { username: "", email: "", password: "" },
   });
 
   return (
@@ -35,7 +34,7 @@ export default function AuthPage() {
       <div className="flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle>Virtual Library</CardTitle>
+            <CardTitle>OpenShelf</CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login">
@@ -73,7 +72,9 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" loading={loginMutation.isPending}>Login</Button>
+                    <Button type="submit" disabled={loginMutation.isPending}>
+                      {loginMutation.isPending ? "Logging in..." : "Login"}
+                    </Button>
                   </form>
                 </Form>
               </TabsContent>
@@ -96,6 +97,19 @@ export default function AuthPage() {
                     />
                     <FormField
                       control={registerForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
                       name="password"
                       render={({ field }) => (
                         <FormItem>
@@ -107,7 +121,9 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" loading={registerMutation.isPending}>Register</Button>
+                    <Button type="submit" disabled={registerMutation.isPending}>
+                      {registerMutation.isPending ? "Creating account..." : "Create Account"}
+                    </Button>
                   </form>
                 </Form>
               </TabsContent>
@@ -118,15 +134,15 @@ export default function AuthPage() {
 
       <div className="hidden md:flex flex-col justify-center items-center bg-primary text-primary-foreground p-8 rounded-lg">
         <BookOpen className="h-16 w-16 mb-4" />
-        <h1 className="text-3xl font-bold mb-4">Welcome to Virtual Library</h1>
+        <h1 className="text-3xl font-bold mb-4">Welcome to OpenShelf</h1>
         <p className="text-lg text-center mb-6">
-          Join our community-driven book sharing platform. List your books, earn credits, and borrow from others.
+          Join our community-driven book sharing platform. Share your books, discover new reads, and connect with fellow book lovers.
         </p>
         <ul className="space-y-2">
-          <li>✓ Share books with your community</li>
-          <li>✓ Earn credits by listing books</li>
-          <li>✓ Chat with fellow readers</li>
-          <li>✓ Create book clubs</li>
+          <li>✓ Share books and earn credits</li>
+          <li>✓ Borrow books using your credits</li>
+          <li>✓ Connect with other readers</li>
+          <li>✓ Build your reading community</li>
         </ul>
       </div>
     </div>

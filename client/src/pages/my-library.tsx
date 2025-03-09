@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertBookSchema, type InsertBook, type Book } from "@shared/schema";
@@ -18,22 +19,21 @@ export default function MyLibrary() {
   const { toast } = useToast();
 
   const form = useForm<InsertBook>({
-    resolver: zodResolver(insertBookSchema),
+    resolver: zodResolver(insertBookSchema.omit({ location: true })),
     defaultValues: {
       title: "",
       author: "",
       description: "",
-      location: "",
       condition: "good",
     },
   });
 
-  const { data: myBooks, isLoading } = useQuery<Book[]>({
+  const { data: myBooks, isLoading: loadingBooks } = useQuery<Book[]>({
     queryKey: ["/api/books"],
     select: (books) => books.filter(b => b.ownerId === user?.id),
   });
 
-  const { data: borrowedBooks } = useQuery<Book[]>({
+  const { data: borrowedBooks, isLoading: loadingBorrowed } = useQuery<Book[]>({
     queryKey: ["/api/books"],
     select: (books) => books.filter(b => b.borrowerId === user?.id),
   });
@@ -47,7 +47,7 @@ export default function MyLibrary() {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
       toast({
         title: "Success",
-        description: "Book added successfully",
+        description: "Book added successfully! You earned 0.5 credits.",
       });
       form.reset();
     },
@@ -60,27 +60,7 @@ export default function MyLibrary() {
     },
   });
 
-  const returnBookMutation = useMutation({
-    mutationFn: async (bookId: number) => {
-      await apiRequest("POST", `/api/books/${bookId}/return`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
-      toast({
-        title: "Success",
-        description: "Book returned successfully",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error returning book",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  if (isLoading) {
+  if (loadingBooks || loadingBorrowed) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -90,91 +70,85 @@ export default function MyLibrary() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="grid gap-8">
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">My Listed Books</h2>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Book
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">My Library</h1>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Book
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add a New Book</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate({ ...data, location: 'N/A' }))} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="author"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Author</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="condition"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Condition</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g. like new, good, fair" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>
+                  {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add a New Book</DialogTitle>
-                </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Title</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="author"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Author</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="location"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Location</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="e.g. 2km from city center" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="condition"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Condition</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="e.g. like new, good, fair" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full" loading={addBookMutation.isPending}>
-                      Add Book
-                    </Button>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Tabs defaultValue="listed" className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="listed">Listed Books</TabsTrigger>
+          <TabsTrigger value="borrowed">Borrowed Books</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="listed">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {myBooks?.map(book => (
               <Card key={book.id}>
@@ -197,10 +171,9 @@ export default function MyLibrary() {
               </Card>
             ))}
           </div>
-        </section>
+        </TabsContent>
 
-        <section>
-          <h2 className="text-2xl font-bold mb-4">Borrowed Books</h2>
+        <TabsContent value="borrowed">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {borrowedBooks?.map(book => (
               <Card key={book.id}>
@@ -219,8 +192,8 @@ export default function MyLibrary() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full"
                     onClick={() => returnBookMutation.mutate(book.id)}
                     loading={returnBookMutation.isPending}
@@ -231,8 +204,8 @@ export default function MyLibrary() {
               </Card>
             ))}
           </div>
-        </section>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

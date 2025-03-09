@@ -5,8 +5,9 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  credits: integer("credits").notNull().default(1),
+  credits: integer("credits").notNull().default(0),
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];
@@ -25,7 +26,6 @@ export const books = pgTable("books", {
   borrowerId: integer("borrower_id"),
   borrowDeadline: timestamp("borrow_deadline"),
   condition: text("condition"),
-  location: text("location").notNull(),
   donated: boolean("donated").default(false),
 });
 
@@ -40,6 +40,7 @@ export const chats = pgTable("chats", {
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
+  email: true,
   password: true,
 });
 
