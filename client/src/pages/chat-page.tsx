@@ -113,7 +113,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (activeChat && chats) {
-      const activeMessages = chats.filter(chat => 
+      const activeMessages = chats.filter(chat =>
         (chat.senderId === user?.id && chat.receiverId === activeChat) ||
         (chat.receiverId === user?.id && chat.senderId === activeChat)
       );
@@ -135,15 +135,50 @@ export default function ChatPage() {
           credits: data.credits
         }));
       } else if (data.type === 'CHAT_MESSAGE') {
-        queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
+        // Immediately add the new chat to the messages if it's for the active chat
+        const chat = data.chat;
+        if (activeChat === chat.senderId || activeChat === chat.receiverId) {
+          setMessages(prev => [...prev, chat]);
+        }
+
+        // Update chat rooms to show the new chat immediately
+        setChatRooms(prev => {
+          const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
+          const existingRoomIndex = prev.findIndex(room => room.userId === otherUserId);
+
+          if (existingRoomIndex === -1) {
+            // Create new chat room if it doesn't exist
+            return [...prev, {
+              userId: otherUserId,
+              username: `User #${otherUserId}`,
+              lastMessage: chat.message,
+              bookId: chat.bookId,
+              bookTitle: data.bookTitle
+            }];
+          } else {
+            // Update existing chat room
+            const updatedRooms = [...prev];
+            updatedRooms[existingRoomIndex] = {
+              ...updatedRooms[existingRoomIndex],
+              lastMessage: chat.message,
+              bookId: chat.bookId || updatedRooms[existingRoomIndex].bookId,
+              bookTitle: data.bookTitle || updatedRooms[existingRoomIndex].bookTitle
+            };
+            return updatedRooms;
+          }
+        });
+
+        // Set active chat to the new chat if it's a new borrow request acceptance
+        if (chat.message.includes("has been accepted!") && !activeChat) {
+          setActiveChat(chat.senderId === user?.id ? chat.receiverId : chat.senderId);
+        }
+
         if (data.bookTitle) {
           toast({
             title: "New Message",
             description: `Regarding book: ${data.bookTitle}`,
           });
         }
-      } else {
-        setMessages(prev => [...prev, data]);
       }
     };
 
@@ -158,7 +193,7 @@ export default function ChatPage() {
     return () => {
       wsRef.current?.close();
     };
-  }, [user?.id, toast]);
+  }, [user?.id, activeChat, toast]);
 
   useEffect(() => {
     if (scrollRef.current) {

@@ -91,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (book.borrowed) return res.status(400).send("Book already borrowed");
     if (req.user!.credits < 1) return res.status(400).send("Insufficient credits");
 
-    // Create a borrow request instead of immediately borrowing
+    // Create a borrow request
     const request = await storage.createBorrowRequest({
       bookId,
       requesterId: req.user!.id,
@@ -105,10 +105,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       bookId,
     });
 
-    // Broadcast the chat message to connected clients
+    // Broadcast the chat message
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(chat));
+        client.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          chat,
+          bookTitle: book.title
+        }));
       }
     });
 
@@ -208,7 +212,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(chat));
+        client.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          chat,
+          bookTitle: book.title
+        }));
       }
     });
 
@@ -225,7 +233,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Broadcast to all clients
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(chat));
+            client.send(JSON.stringify({
+              type: 'CHAT_MESSAGE',
+              chat,
+              bookTitle: "Chat message"
+            }));
           }
         });
       } catch (err) {
