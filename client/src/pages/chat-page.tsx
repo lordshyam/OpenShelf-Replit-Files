@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Chat, BorrowRequest, type Book } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -21,12 +22,12 @@ type ChatRoom = {
 export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { send } = useWebSocket();
   const [activeChat, setActiveChat] = useState<number | null>(null);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [messages, setMessages] = useState<Chat[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
 
   const { data: books } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -38,48 +39,6 @@ export default function ChatPage() {
 
   const { data: chats, isLoading: loadingChats } = useQuery<Chat[]>({
     queryKey: ["/api/chats", user?.id],
-  });
-
-  const acceptRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      await apiRequest("POST", `/api/borrow-requests/${requestId}/accept`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
-      toast({
-        title: "Success",
-        description: "Borrow request accepted. You can now chat with the borrower.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const declineRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      await apiRequest("POST", `/api/borrow-requests/${requestId}/decline`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
-      toast({
-        title: "Success",
-        description: "Borrow request declined",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
   });
 
   useEffect(() => {
@@ -122,97 +81,13 @@ export default function ChatPage() {
   }, [activeChat, chats, user?.id]);
 
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    wsRef.current = new WebSocket(wsUrl);
-
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === 'CREDIT_UPDATE' && data.userId === user?.id) {
-        queryClient.setQueryData(["/api/user"], (oldData: any) => ({
-          ...oldData,
-          credits: data.credits
-        }));
-      } else if (data.type === 'CHAT_MESSAGE') {
-        const chat = data.chat;
-
-        // Update the chats query cache
-        queryClient.setQueryData(["/api/chats", user?.id], (oldChats: Chat[] | undefined) => {
-          if (!oldChats) return [chat];
-          return [...oldChats, chat];
-        });
-
-        // Update chat rooms immediately
-        setChatRooms(prev => {
-          const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
-          const existingRoomIndex = prev.findIndex(room => room.userId === otherUserId);
-
-          if (existingRoomIndex === -1) {
-            return [...prev, {
-              userId: otherUserId,
-              username: `User #${otherUserId}`,
-              lastMessage: chat.message,
-              bookId: chat.bookId,
-              bookTitle: data.bookTitle
-            }];
-          } else {
-            const updatedRooms = [...prev];
-            updatedRooms[existingRoomIndex] = {
-              ...updatedRooms[existingRoomIndex],
-              lastMessage: chat.message,
-              bookId: chat.bookId || updatedRooms[existingRoomIndex].bookId,
-              bookTitle: data.bookTitle || updatedRooms[existingRoomIndex].bookTitle
-            };
-            return updatedRooms;
-          }
-        });
-
-        // If this is a new chat or it's relevant to the active chat, update messages
-        if (!activeChat || activeChat === chat.senderId || activeChat === chat.receiverId) {
-          setMessages(prev => [...prev, chat]);
-        }
-
-        // Show notification
-        if (chat.senderId !== user?.id) {
-          toast({
-            title: "New Message",
-            description: data.bookTitle ? `Regarding book: ${data.bookTitle}` : chat.message,
-          });
-        }
-      }
-    };
-
-    wsRef.current.onerror = () => {
-      toast({
-        title: "WebSocket Error",
-        description: "Failed to connect to chat server",
-        variant: "destructive",
-      });
-    };
-
-    // Implement reconnection logic
-    wsRef.current.onclose = () => {
-      setTimeout(() => {
-        if (wsRef.current?.readyState === WebSocket.CLOSED) {
-          wsRef.current = new WebSocket(wsUrl);
-        }
-      }, 1000);
-    };
-
-    return () => {
-      wsRef.current?.close();
-    };
-  }, [user?.id, activeChat, toast]);
-
-  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !wsRef.current || !activeChat) return;
+    if (!newMessage.trim() || !activeChat) return;
 
     const message = {
       senderId: user!.id,
@@ -222,9 +97,51 @@ export default function ChatPage() {
       timestamp: new Date().toISOString()
     };
 
-    wsRef.current.send(JSON.stringify(message));
+    send(message);
     setNewMessage("");
   };
+
+  const acceptRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      await apiRequest("POST", `/api/borrow-requests/${requestId}/accept`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
+      toast({
+        title: "Success",
+        description: "Borrow request accepted. You can now chat with the borrower.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const declineRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      await apiRequest("POST", `/api/borrow-requests/${requestId}/decline`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
+      toast({
+        title: "Success",
+        description: "Borrow request declined",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (loadingRequests || loadingChats) {
     return (
