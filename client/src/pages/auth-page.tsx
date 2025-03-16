@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen } from "lucide-react";
@@ -36,7 +36,10 @@ export default function AuthPage() {
 
   const verificationForm = useForm({
     resolver: zodResolver(verifyEmailSchema),
-    defaultValues: { email: "", code: "" },
+    defaultValues: { 
+      email: "", 
+      code: "" 
+    },
   });
 
   const handleVerification = async (data: { code: string }) => {
@@ -68,6 +71,13 @@ export default function AuthPage() {
     }
   };
 
+  // When pendingVerification changes, update form default values
+  useEffect(() => {
+    if (pendingVerification) {
+      verificationForm.reset({ email: pendingVerification, code: "" });
+    }
+  }, [pendingVerification, verificationForm]);
+
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
       <div className="flex items-center justify-center">
@@ -98,8 +108,12 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" className="w-full">
-                      Verify Email
+                    <Button 
+                      type="submit" 
+                      className="w-full"
+                      disabled={!verificationForm.formState.isValid || verificationForm.formState.isSubmitting}
+                    >
+                      {verificationForm.formState.isSubmitting ? "Verifying..." : "Verify Email"}
                     </Button>
                   </form>
                 </Form>
