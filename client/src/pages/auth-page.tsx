@@ -171,7 +171,7 @@ export default function AuthPage() {
                           setPendingVerification(data.email);
                           toast({
                             title: "Registration successful",
-                            description: "Please check your email for the verification code.",
+                            description: "Verification code sent! Please check both your inbox and spam folder.",
                           });
                         } else {
                           throw new Error(result.message || "Registration failed");
