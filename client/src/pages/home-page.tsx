@@ -1,14 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Book as BookIcon, MapPin, UserCheck, Search, BookOpen, Library } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Book } from "@shared/schema";
+import { Book, InsertBook } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,6 +20,48 @@ export default function HomePage() {
     queryKey: ["/api/books"],
   });
 
+  const createBookMutation = useMutation({
+    mutationFn: async (bookData: InsertBook) => {
+      const res = await apiRequest("POST", "/api/books", bookData);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      toast({
+        title: "Success",
+        description: "Book added successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error adding book",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const borrowBookMutation = useMutation({
+    mutationFn: async (bookId: string) => {
+      const res = await apiRequest("POST", `/api/books/${bookId}/borrow`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Borrow request sent to the owner",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error creating borrow request",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+
   if (error) {
     toast({
       title: "Error loading books",
@@ -27,7 +70,7 @@ export default function HomePage() {
     });
   }
 
-  const filteredBooks = books?.filter(book => 
+  const filteredBooks = books?.filter(book =>
     book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     book.author.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -44,7 +87,7 @@ export default function HomePage() {
 
             <div className="relative max-w-xl mx-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted" />
-              <Input 
+              <Input
                 placeholder="Search books by title or author..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -113,7 +156,7 @@ export default function HomePage() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button 
+                <Button
                   className="w-full"
                   disabled={user?.credits < 1 || book.ownerId === user?.id}
                   onClick={() => {
@@ -135,25 +178,7 @@ export default function HomePage() {
                       return;
                     }
 
-                    // Create a borrow request
-                    fetch(`/api/books/${book.id}/borrow`, { 
-                      method: 'POST',
-                      credentials: 'include',
-                    })
-                      .then(res => {
-                        if (!res.ok) throw new Error("Failed to create borrow request");
-                        toast({
-                          title: "Success",
-                          description: "Borrow request sent to the owner",
-                        });
-                      })
-                      .catch(err => {
-                        toast({
-                          title: "Error creating borrow request",
-                          description: err.message,
-                          variant: "destructive",
-                        });
-                      });
+                    borrowBookMutation.mutate(book.id);
                   }}
                 >
                   {book.ownerId === user?.id ? "Your Book" : "Borrow Book"}
