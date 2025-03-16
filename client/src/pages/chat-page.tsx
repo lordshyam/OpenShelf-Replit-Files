@@ -135,19 +135,20 @@ export default function ChatPage() {
           credits: data.credits
         }));
       } else if (data.type === 'CHAT_MESSAGE') {
-        // Immediately add the new chat to the messages if it's for the active chat
         const chat = data.chat;
-        if (activeChat === chat.senderId || activeChat === chat.receiverId) {
-          setMessages(prev => [...prev, chat]);
-        }
 
-        // Update chat rooms to show the new chat immediately
+        // Update the chats query cache
+        queryClient.setQueryData(["/api/chats", user?.id], (oldChats: Chat[] | undefined) => {
+          if (!oldChats) return [chat];
+          return [...oldChats, chat];
+        });
+
+        // Update chat rooms immediately
         setChatRooms(prev => {
           const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
           const existingRoomIndex = prev.findIndex(room => room.userId === otherUserId);
 
           if (existingRoomIndex === -1) {
-            // Create new chat room if it doesn't exist
             return [...prev, {
               userId: otherUserId,
               username: `User #${otherUserId}`,
@@ -156,7 +157,6 @@ export default function ChatPage() {
               bookTitle: data.bookTitle
             }];
           } else {
-            // Update existing chat room
             const updatedRooms = [...prev];
             updatedRooms[existingRoomIndex] = {
               ...updatedRooms[existingRoomIndex],
@@ -168,15 +168,16 @@ export default function ChatPage() {
           }
         });
 
-        // Set active chat to the new chat if it's a new borrow request acceptance
-        if (chat.message.includes("has been accepted!") && !activeChat) {
-          setActiveChat(chat.senderId === user?.id ? chat.receiverId : chat.senderId);
+        // If this is a new chat or it's relevant to the active chat, update messages
+        if (!activeChat || activeChat === chat.senderId || activeChat === chat.receiverId) {
+          setMessages(prev => [...prev, chat]);
         }
 
-        if (data.bookTitle) {
+        // Show notification
+        if (chat.senderId !== user?.id) {
           toast({
             title: "New Message",
-            description: `Regarding book: ${data.bookTitle}`,
+            description: data.bookTitle ? `Regarding book: ${data.bookTitle}` : chat.message,
           });
         }
       }
@@ -188,6 +189,15 @@ export default function ChatPage() {
         description: "Failed to connect to chat server",
         variant: "destructive",
       });
+    };
+
+    // Implement reconnection logic
+    wsRef.current.onclose = () => {
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.CLOSED) {
+          wsRef.current = new WebSocket(wsUrl);
+        }
+      }, 1000);
     };
 
     return () => {
