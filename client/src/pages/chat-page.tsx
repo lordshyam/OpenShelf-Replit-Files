@@ -17,6 +17,7 @@ type ChatRoom = {
   lastMessage?: string;
   bookId?: number;
   bookTitle?: string;
+  avatar?: string;
 };
 
 export default function ChatPage() {
@@ -41,32 +42,58 @@ export default function ChatPage() {
     queryKey: ["/api/chats", user?.id],
   });
 
+  // Assumed storage function -  Needs to be implemented elsewhere
+  const storage = {
+    async getUser(userId: number): Promise<{ avatar?: string } | null> {
+      // Replace with your actual user data fetching logic
+      // This is a placeholder
+      try {
+        const response = await fetch(`/api/users/${userId}`);
+        if (!response.ok) {
+          return null;
+        }
+        const data = await response.json();
+        return { avatar: data.avatar };
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        return null;
+      }
+
+    }
+  };
+
+
   useEffect(() => {
     if (chats && books) {
       // Group chats by user and associate with books
       const rooms = new Map<number, ChatRoom>();
-      chats.forEach(chat => {
-        const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
-        const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
+      const fetchRooms = async () => {
+        for (const chat of chats) {
+          const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
+          const otherUser = await storage.getUser(otherUserId);
+          const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
 
-        if (!rooms.has(otherUserId)) {
-          rooms.set(otherUserId, {
-            userId: otherUserId,
-            username: `User #${otherUserId}`,
-            lastMessage: chat.message,
-            bookId: chat.bookId,
-            bookTitle: book?.title
-          });
-        } else {
-          const room = rooms.get(otherUserId)!;
-          room.lastMessage = chat.message;
-          if (!room.bookId && chat.bookId) {
-            room.bookId = chat.bookId;
-            room.bookTitle = book?.title;
+          if (!rooms.has(otherUserId)) {
+            rooms.set(otherUserId, {
+              userId: otherUserId,
+              username: `User #${otherUserId}`,
+              lastMessage: chat.message,
+              bookId: chat.bookId,
+              bookTitle: book?.title,
+              avatar: otherUser?.avatar
+            });
+          } else {
+            const room = rooms.get(otherUserId)!;
+            room.lastMessage = chat.message;
+            if (!room.bookId && chat.bookId) {
+              room.bookId = chat.bookId;
+              room.bookTitle = book?.title;
+            }
           }
         }
-      });
-      setChatRooms(Array.from(rooms.values()));
+        setChatRooms(Array.from(rooms.values()));
+      }
+      fetchRooms();
     }
   }, [chats, books, user?.id]);
 
@@ -208,15 +235,27 @@ export default function ChatPage() {
                 }`}
                 onClick={() => setActiveChat(room.userId)}
               >
-                <div className="font-medium">{room.username}</div>
+                <div className="flex items-center gap-2">
+                  {room.avatar ? (
+                    <div
+                      className="w-8 h-8 rounded-full"
+                      style={{ backgroundImage: `url(${room.avatar})`, backgroundSize: 'cover' }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                      {room.username.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="font-medium">{room.username}</div>
+                </div>
                 {room.bookTitle && (
-                  <div className="flex items-center text-xs text-primary gap-1 mb-1">
+                  <div className="flex items-center text-xs text-primary gap-1 mb-1 ml-10">
                     <BookOpen className="h-3 w-3" />
                     <span>{room.bookTitle}</span>
                   </div>
                 )}
                 {room.lastMessage && (
-                  <div className="text-sm text-muted-foreground truncate">
+                  <div className="text-sm text-muted-foreground truncate ml-10">
                     {room.lastMessage}
                   </div>
                 )}

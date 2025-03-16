@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   credits: integer("credits").notNull().default(0),
   verified: boolean("verified").default(false),
   verificationCode: text("verification_code"),
+  avatar: text("avatar"),
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];

@@ -1,4 +1,5 @@
 import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences } from "@shared/schema";
+import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 
@@ -77,7 +78,8 @@ export class MemStorage implements IStorage {
       credits: 0, 
       preferences: null,
       verified: false,
-      verificationCode: insertUser.verificationCode
+      verificationCode: insertUser.verificationCode,
+      avatar: getRandomAvatar()
     };
     this.users.set(id, user);
     return user;
