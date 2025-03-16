@@ -1,8 +1,11 @@
-import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences } from "@shared/schema";
+import { users, books, chats, borrowRequests, type User, type Book, type Chat, type BorrowRequest, type InsertUser, type InsertBook, type InsertChat, type InsertBorrowRequest, type UserPreferences } from "@shared/schema";
+import { db } from "./db";
+import { eq, or, and } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User operations
@@ -34,162 +37,129 @@ export interface IStorage {
   sessionStore: session.SessionStore;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private books: Map<number, Book>;
-  private chats: Map<number, Chat>;
-  private borrowRequests: Map<number, BorrowRequest>;
-  private currentId: number;
+export class DatabaseStorage implements IStorage {
   sessionStore: session.SessionStore;
 
   constructor() {
-    this.users = new Map();
-    this.books = new Map();
-    this.chats = new Map();
-    this.borrowRequests = new Map();
-    this.currentId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email.toLowerCase() === email.toLowerCase(),
-    );
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { 
-      ...insertUser, 
-      id, 
-      credits: 0, 
-      preferences: null,
+    const [user] = await db.insert(users).values({
+      ...insertUser,
+      email: insertUser.email.toLowerCase(),
       verified: false,
-      verificationCode: insertUser.verificationCode
-    };
-    this.users.set(id, user);
+      credits: 0,
+    }).returning();
     return user;
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<void> {
-    const user = await this.getUser(id);
-    if (!user) throw new Error("User not found");
-    const updatedUser = { ...user, ...updates };
-    this.users.set(id, updatedUser);
+    await db.update(users).set(updates).where(eq(users.id, id));
   }
 
   async updateUserCredits(userId: number, credits: number): Promise<void> {
-    const user = await this.getUser(userId);
-    if (!user) throw new Error("User not found");
-    user.credits = credits;
-    this.users.set(userId, user);
+    await db.update(users).set({ credits }).where(eq(users.id, userId));
   }
 
   async updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void> {
-    const user = await this.getUser(userId);
-    if (!user) throw new Error("User not found");
-    user.preferences = preferences;
-    this.users.set(userId, user);
+    await db.update(users).set({ preferences }).where(eq(users.id, userId));
   }
 
   async getBooks(): Promise<Book[]> {
-    return Array.from(this.books.values());
+    return await db.select().from(books);
   }
 
   async getBooksByOwner(ownerId: number): Promise<Book[]> {
-    return Array.from(this.books.values()).filter(
-      (book) => book.ownerId === ownerId,
-    );
+    return await db.select().from(books).where(eq(books.ownerId, ownerId));
   }
 
   async getBooksByBorrower(borrowerId: number): Promise<Book[]> {
-    return Array.from(this.books.values()).filter(
-      (book) => book.borrowerId === borrowerId,
-    );
+    return await db.select().from(books).where(eq(books.borrowerId, borrowerId));
   }
 
   async createBook(insertBook: InsertBook): Promise<Book> {
-    const id = this.currentId++;
-    const book: Book = {
+    const [book] = await db.insert(books).values({
       ...insertBook,
-      id,
       borrowed: false,
-      borrowerId: null,
-      borrowDeadline: null,
       donated: false,
-    };
-    this.books.set(id, book);
+    }).returning();
     return book;
   }
 
   async updateBook(id: number, updates: Partial<Book>): Promise<Book> {
-    const book = this.books.get(id);
-    if (!book) throw new Error("Book not found");
-    const updatedBook = { ...book, ...updates };
-    this.books.set(id, updatedBook);
-    return updatedBook;
+    const [book] = await db.update(books)
+      .set(updates)
+      .where(eq(books.id, id))
+      .returning();
+    return book;
   }
 
   async deleteBook(id: number): Promise<void> {
-    this.books.delete(id);
+    await db.delete(books).where(eq(books.id, id));
   }
 
   async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
-    return Array.from(this.borrowRequests.values()).filter(
-      (req) => {
-        const book = this.books.get(req.bookId);
-        return book && (book.ownerId === userId || req.requesterId === userId);
-      }
-    );
+    return await db.select()
+      .from(borrowRequests)
+      .where(
+        or(
+          eq(borrowRequests.requesterId, userId),
+          and(
+            eq(books.ownerId, userId),
+            eq(books.id, borrowRequests.bookId)
+          )
+        )
+      );
   }
 
   async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
-    const id = this.currentId++;
-    const borrowRequest: BorrowRequest = {
+    const [borrowRequest] = await db.insert(borrowRequests).values({
       ...request,
-      id,
       status: "pending",
-      createdAt: new Date(),
-    };
-    this.borrowRequests.set(id, borrowRequest);
+    }).returning();
     return borrowRequest;
   }
 
   async updateBorrowRequest(id: number, status: string): Promise<void> {
-    const request = this.borrowRequests.get(id);
-    if (!request) throw new Error("Borrow request not found");
-    request.status = status;
-    this.borrowRequests.set(id, request);
+    await db.update(borrowRequests)
+      .set({ status })
+      .where(eq(borrowRequests.id, id));
   }
 
   async getChats(userId: number): Promise<Chat[]> {
-    return Array.from(this.chats.values()).filter(
-      (chat) => chat.senderId === userId || chat.receiverId === userId,
-    );
+    return await db.select()
+      .from(chats)
+      .where(
+        or(
+          eq(chats.senderId, userId),
+          eq(chats.receiverId, userId)
+        )
+      );
   }
 
   async createChat(insertChat: InsertChat): Promise<Chat> {
-    const id = this.currentId++;
-    const chat: Chat = {
-      ...insertChat,
-      id,
-      timestamp: new Date(),
-    };
-    this.chats.set(id, chat);
+    const [chat] = await db.insert(chats).values(insertChat).returning();
     return chat;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
