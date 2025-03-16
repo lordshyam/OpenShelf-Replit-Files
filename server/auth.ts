@@ -5,7 +5,8 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { insertUserSchema, User as SelectUser } from "@shared/schema";
+import { insertUserSchema, verifyEmailSchema, User as SelectUser } from "@shared/schema";
+import { sendVerificationEmail, generateVerificationCode } from "./email";
 
 declare global {
   namespace Express {
@@ -52,9 +53,13 @@ export function setupAuth(app: Express) {
 
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
-        } else {
-          return done(null, user);
         }
+
+        if (!user.verified) {
+          return done(null, false, { message: "Please verify your email first" });
+        }
+
+        return done(null, user);
       } catch (err) {
         return done(err);
       }
@@ -87,25 +92,68 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
+      // Generate verification code
+      const verificationCode = generateVerificationCode();
+
+      // Create unverified user
       const user = await storage.createUser({
         ...result.data,
         password: await hashPassword(result.data.password),
+        verified: false,
+        verificationCode,
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(user);
+      // Send verification email
+      try {
+        await sendVerificationEmail(email, verificationCode);
+      } catch (err) {
+        console.error('Failed to send verification email:', err);
+        return res.status(500).json({ message: "Failed to send verification email" });
+      }
+
+      res.status(201).json({ 
+        message: "Registration successful. Please check your email for verification code.",
+        email
       });
     } catch (err) {
       next(err);
     }
   });
 
+  app.post("/api/verify-email", async (req, res) => {
+    const result = verifyEmailSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json(result.error);
+    }
+
+    const { email, code } = result.data;
+    const user = await storage.getUserByEmail(email);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.verified) {
+      return res.status(400).json({ message: "Email already verified" });
+    }
+
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ message: "Invalid verification code" });
+    }
+
+    await storage.updateUser(user.id, { verified: true, verificationCode: null });
+
+    req.login(user, (err) => {
+      if (err) return res.status(500).json({ message: "Login failed" });
+      res.json(user);
+    });
+  });
+
   app.post("/api/login", (req, res, next) => {
     passport.authenticate("local", (err, user, info) => {
       if (err) return next(err);
       if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
       req.login(user, (err) => {
         if (err) return next(err);

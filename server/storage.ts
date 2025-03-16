@@ -8,8 +8,9 @@ export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;  // New function
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, updates: Partial<User>): Promise<void>;
   updateUserCredits(userId: number, credits: number): Promise<void>;
   updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void>;
 
@@ -70,9 +71,23 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentId++;
-    const user: User = { ...insertUser, id, credits: 0, preferences: null };
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      credits: 0, 
+      preferences: null,
+      verified: false,
+      verificationCode: insertUser.verificationCode
+    };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<void> {
+    const user = await this.getUser(id);
+    if (!user) throw new Error("User not found");
+    const updatedUser = { ...user, ...updates };
+    this.users.set(id, updatedUser);
   }
 
   async updateUserCredits(userId: number, credits: number): Promise<void> {

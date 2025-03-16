@@ -8,6 +8,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   credits: integer("credits").notNull().default(0),
+  verified: boolean("verified").default(false),
+  verificationCode: text("verification_code"),
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];
@@ -35,6 +37,12 @@ export const insertUserSchema = createInsertSchema(users)
       .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
   });
+
+// Schema for verifying email
+export const verifyEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6, "Verification code must be 6 characters"),
+});
 
 export const books = pgTable("books", {
   id: serial("id").primaryKey(),
