@@ -7,9 +7,16 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  tls: {
+    rejectUnauthorized: false // For development purposes
+  }
 });
 
 export async function sendVerificationEmail(email: string, code: string) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error('Email credentials are not configured');
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -22,7 +29,14 @@ export async function sendVerificationEmail(email: string, code: string) {
     `,
   };
 
-  return transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.response);
+    return info;
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    throw error;
+  }
 }
 
 export function generateVerificationCode(): string {
