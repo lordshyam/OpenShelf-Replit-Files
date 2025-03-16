@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BookOpen } from "lucide-react";
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user, loginMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [pendingVerification, setPendingVerification] = useState<string | null>(null);
@@ -24,8 +24,7 @@ export default function AuthPage() {
     return null;
   }
 
-  const loginForm = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema.omit({ email: true })),
+  const loginForm = useForm<{ username: string; password: string }>({
     defaultValues: { username: "", password: "" },
   });
 
@@ -42,6 +41,13 @@ export default function AuthPage() {
     },
   });
 
+  // When pendingVerification changes, update form default values
+  useEffect(() => {
+    if (pendingVerification) {
+      verificationForm.reset({ email: pendingVerification, code: "" });
+    }
+  }, [pendingVerification, verificationForm]);
+
   const handleVerification = async (data: { code: string }) => {
     if (!pendingVerification) return;
 
@@ -56,12 +62,12 @@ export default function AuthPage() {
         throw new Error(error.message || "Verification failed");
       }
 
-      const user = await res.json();
+      const result = await res.json();
       toast({
         title: "Success!",
-        description: "Email verified successfully. Welcome to OpenShelf!",
+        description: result.message,
       });
-      setLocation("/");
+      setPendingVerification(null); // Clear the pending verification
     } catch (error: any) {
       toast({
         title: "Verification failed",
@@ -70,13 +76,6 @@ export default function AuthPage() {
       });
     }
   };
-
-  // When pendingVerification changes, update form default values
-  useEffect(() => {
-    if (pendingVerification) {
-      verificationForm.reset({ email: pendingVerification, code: "" });
-    }
-  }, [pendingVerification, verificationForm]);
 
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
@@ -135,7 +134,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Username or Email</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} placeholder="Enter your username or email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -148,7 +147,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} />
+                              <Input type="password" {...field} placeholder="Enter your password" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -192,7 +191,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Username</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} placeholder="Choose a username" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -205,7 +204,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input type="email" {...field} />
+                              <Input type="email" {...field} placeholder="Enter your Gmail address" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -218,14 +217,16 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} />
+                              <Input type="password" {...field} placeholder="Create a strong password" />
                             </FormControl>
-                            <FormMessage />
+                            <FormMessage className="text-sm text-muted-foreground">
+                              Password must be at least 6 characters, include an uppercase letter and a number
+                            </FormMessage>
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
-                        {registerMutation.isPending ? "Creating account..." : "Create Account"}
+                      <Button type="submit" className="w-full" disabled={registerForm.formState.isSubmitting}>
+                        {registerForm.formState.isSubmitting ? "Creating account..." : "Create Account"}
                       </Button>
                     </form>
                   </Form>

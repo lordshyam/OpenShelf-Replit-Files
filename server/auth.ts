@@ -47,12 +47,16 @@ export function setupAuth(app: Express) {
       try {
         // Check if input is email or username
         const isEmail = username.includes('@');
-        const user = isEmail 
+        let user = isEmail 
           ? await storage.getUserByEmail(username)
           : await storage.getUserByUsername(username);
 
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
+        if (!user) {
+          return done(null, false, { message: "Invalid credentials" });
+        }
+
+        if (!(await comparePasswords(password, user.password))) {
+          return done(null, false, { message: "Invalid credentials" });
         }
 
         if (!user.verified) {
@@ -142,11 +146,7 @@ export function setupAuth(app: Express) {
     }
 
     await storage.updateUser(user.id, { verified: true, verificationCode: null });
-
-    req.login(user, (err) => {
-      if (err) return res.status(500).json({ message: "Login failed" });
-      res.json(user);
-    });
+    res.json({ message: "Email verified successfully" });
   });
 
   app.post("/api/login", (req, res, next) => {
