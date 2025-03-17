@@ -56,6 +56,7 @@ export default function MyLibrary() {
         description: "Book added successfully! You earned 0.5 credits.",
       });
       form.reset();
+      setImagePreview(null);
     },
     onError: (error: Error) => {
       toast({
@@ -183,7 +184,7 @@ export default function MyLibrary() {
                         <FormItem>
                           <FormLabel>Description</FormLabel>
                           <FormControl>
-                            <Textarea {...field} />
+                            <Textarea {...field} className="min-h-[100px]" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
