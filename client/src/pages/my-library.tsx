@@ -12,12 +12,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertBookSchema, type InsertBook, type Book, bookGenres } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, BookOpen, Clock, Loader2, Library, Upload } from "lucide-react";
+import { Plus, BookOpen, Clock, Loader2, Library, Upload, Camera } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useState } from "react";
 
 export default function MyLibrary() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const form = useForm<InsertBook>({
     resolver: zodResolver(insertBookSchema),
@@ -27,7 +29,8 @@ export default function MyLibrary() {
       description: "",
       condition: "good",
       genre: "Fiction",
-      ownerId: user?.id
+      ownerId: user?.id,
+      imageUrl: ""
     },
   });
 
@@ -70,6 +73,36 @@ export default function MyLibrary() {
       </div>
     );
   }
+
+  const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast({
+        title: "Image too large",
+        description: "Please choose an image under 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create a preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Convert to base64 for storage
+    const base64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+
+    form.setValue("imageUrl", base64);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -169,19 +202,63 @@ export default function MyLibrary() {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="imageUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Book Image URL</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="url" placeholder="https://example.com/book-image.jpg" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                    <div className="space-y-4">
+                      <label className="block text-sm font-medium">Book Image</label>
+                      {imagePreview && (
+                        <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-2 right-2"
+                            onClick={() => {
+                              setImagePreview(null);
+                              form.setValue("imageUrl", "");
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       )}
-                    />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageCapture}
+                            className="hidden"
+                            id="image-upload"
+                          />
+                          <label htmlFor="image-upload">
+                            <Button type="button" variant="outline" className="w-full" asChild>
+                              <span>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Upload Image
+                              </span>
+                            </Button>
+                          </label>
+                        </div>
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleImageCapture}
+                            className="hidden"
+                            id="camera-capture"
+                          />
+                          <label htmlFor="camera-capture">
+                            <Button type="button" variant="outline" className="w-full" asChild>
+                              <span>
+                                <Camera className="mr-2 h-4 w-4" />
+                                Take Photo
+                              </span>
+                            </Button>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                     <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>
                       {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
                     </Button>
