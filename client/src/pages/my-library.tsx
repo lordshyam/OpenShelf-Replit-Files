@@ -121,12 +121,12 @@ export default function MyLibrary() {
                   Add Book
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add a New Book</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4">
+                  <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4 pb-2">
                     <FormField
                       control={form.control}
                       name="title"
