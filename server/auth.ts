@@ -32,9 +32,14 @@ async function comparePasswords(supplied: string, stored: string) {
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     store: storage.sessionStore,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      httpOnly: true,
+    }
   };
 
   app.set("trust proxy", 1);
@@ -59,10 +64,6 @@ export function setupAuth(app: Express) {
           return done(null, false, { message: "Invalid credentials" });
         }
 
-        if (!user.verified) {
-          return done(null, false, { message: "Please verify your email first" });
-        }
-
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -72,8 +73,15 @@ export function setupAuth(app: Express) {
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: number, done) => {
-    const user = await storage.getUser(id);
-    done(null, user);
+    try {
+      const user = await storage.getUser(id);
+      if (!user) {
+        return done(null, false);
+      }
+      done(null, user);
+    } catch (err) {
+      done(err);
+    }
   });
 
   app.post("/api/register", async (req, res, next) => {
@@ -103,7 +111,6 @@ export function setupAuth(app: Express) {
       const user = await storage.createUser({
         ...result.data,
         password: await hashPassword(result.data.password),
-        verified: false,
         verificationCode,
       });
 
@@ -146,7 +153,14 @@ export function setupAuth(app: Express) {
     }
 
     await storage.updateUser(user.id, { verified: true, verificationCode: null });
-    res.json({ message: "Email verified successfully" });
+
+    // Automatically log in the user after verification
+    req.login(user, (err) => {
+      if (err) {
+        return res.status(500).json({ message: "Error logging in after verification" });
+      }
+      res.json({ message: "Email verified successfully" });
+    });
   });
 
   app.post("/api/login", (req, res, next) => {
@@ -155,6 +169,12 @@ export function setupAuth(app: Express) {
       if (!user) {
         return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
+
+      // Check if user is verified
+      if (!user.verified) {
+        return res.status(401).json({ message: "Please verify your email first" });
+      }
+
       req.login(user, (err) => {
         if (err) return next(err);
         res.status(200).json(user);
