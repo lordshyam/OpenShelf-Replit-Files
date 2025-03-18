@@ -11,13 +11,14 @@ import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loginMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [pendingVerification, setPendingVerification] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false); // Added state for password visibility
 
   if (user) {
     setLocation("/");
@@ -35,9 +36,9 @@ export default function AuthPage() {
 
   const verificationForm = useForm({
     resolver: zodResolver(verifyEmailSchema),
-    defaultValues: { 
-      email: "", 
-      code: "" 
+    defaultValues: {
+      email: "",
+      code: ""
     },
   });
 
@@ -107,8 +108,8 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="w-full"
                       disabled={!verificationForm.formState.isValid || verificationForm.formState.isSubmitting}
                     >
@@ -147,7 +148,22 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} placeholder="Enter your password" />
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  {...field}
+                                  placeholder="Enter your password"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                  onMouseDown={() => setShowPassword(true)}
+                                  onMouseUp={() => setShowPassword(false)}
+                                  onMouseLeave={() => setShowPassword(false)}
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                              </div>
                             </FormControl>
                             <FormMessage />
                           </FormItem>

@@ -18,6 +18,12 @@ export default function HomePage() {
 
   const { data: books, isLoading, error } = useQuery<Book[]>({
     queryKey: ["/api/books"],
+    select: (books) => books.filter(book =>
+      !book.borrowed && !book.donated && (
+        book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        book.author.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    ),
   });
 
   const createBookMutation = useMutation({
@@ -69,11 +75,6 @@ export default function HomePage() {
       variant: "destructive",
     });
   }
-
-  const filteredBooks = books?.filter(book =>
-    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -135,7 +136,7 @@ export default function HomePage() {
                 </CardFooter>
               </Card>
             ))
-          ) : filteredBooks?.filter(book => !book.borrowed && !book.donated).map(book => (
+          ) : books?.map(book => (
             <Card key={book.id} className="flex flex-col">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
