@@ -3,13 +3,79 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertBookSchema, userPreferencesSchema } from "@shared/schema";
+import { insertBookSchema, insertCommunitySchema, userPreferencesSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  // Community routes
+  app.get("/api/communities", async (req, res) => {
+    const communities = await storage.getCommunities();
+    res.json(communities);
+  });
+
+  app.post("/api/communities", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Please login to create a community" });
+    }
+
+    const result = insertCommunitySchema.safeParse({ ...req.body, createdBy: req.user!.id });
+    if (!result.success) {
+      return res.status(400).json(result.error);
+    }
+
+    const community = await storage.createCommunity(result.data);
+    res.status(201).json(community);
+  });
+
+  app.post("/api/communities/:id/join", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Please login to join a community" });
+    }
+
+    const communityId = parseInt(req.params.id);
+    const community = await storage.getCommunity(communityId);
+
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+
+    // Create a join request
+    const request = await storage.createJoinRequest({
+      userId: req.user!.id,
+      communityId
+    });
+
+    // If the user is the creator of the community, auto-approve
+    if (community.createdBy === req.user!.id) {
+      await storage.updateJoinRequest(request.id, "accepted");
+      await storage.updateUser(req.user!.id, { communityId });
+      return res.json({ message: "Joined community successfully" });
+    }
+
+    // Notify community creator about the join request
+    const chat = await storage.createCommunityChat({
+      communityId,
+      userId: req.user!.id,
+      message: `${req.user!.username} has requested to join the community.`
+    });
+
+    // Broadcast the chat message
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'COMMUNITY_JOIN_REQUEST',
+          request,
+          username: req.user!.username
+        }));
+      }
+    });
+
+    res.status(201).json(request);
+  });
 
   // User preferences
   app.post("/api/preferences", async (req, res) => {

@@ -1,4 +1,4 @@
-import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences } from "@shared/schema";
+import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences, Community, CommunityJoinRequest, CommunityChat, InsertCommunity, InsertCommunityJoinRequest, InsertCommunityChat } from "@shared/schema";
 import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -19,16 +19,30 @@ export interface IStorage {
   getBooks(): Promise<Book[]>;
   getBooksByOwner(ownerId: number): Promise<Book[]>;
   getBooksByBorrower(borrowerId: number): Promise<Book[]>;
+  getBooksByCommunity(communityId: number): Promise<Book[]>;
   createBook(book: InsertBook): Promise<Book>;
   updateBook(id: number, updates: Partial<Book>): Promise<Book>;
   deleteBook(id: number): Promise<void>;
 
-  // Borrow request operations
+  // Community operations
+  getCommunities(): Promise<Community[]>;
+  getCommunity(id: number): Promise<Community | undefined>;
+  createCommunity(community: InsertCommunity): Promise<Community>;
+  getCommunityMembers(communityId: number): Promise<User[]>;
+
+  // Community join requests
+  getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]>;
+  createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest>;
+  updateJoinRequest(id: number, status: string): Promise<void>;
+
+  // Community chat
+  getCommunityChats(communityId: number): Promise<CommunityChat[]>;
+  createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat>;
+
+  // Existing operations remain unchanged
   getBorrowRequests(userId: number): Promise<BorrowRequest[]>;
   createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest>;
   updateBorrowRequest(id: number, status: string): Promise<void>;
-
-  // Chat operations
   getChats(userId: number): Promise<Chat[]>;
   createChat(chat: InsertChat): Promise<Chat>;
 
@@ -40,6 +54,9 @@ export class MemStorage implements IStorage {
   private books: Map<number, Book>;
   private chats: Map<number, Chat>;
   private borrowRequests: Map<number, BorrowRequest>;
+  private communities: Map<number, Community>;
+  private communityJoinRequests: Map<number, CommunityJoinRequest>;
+  private communityChats: Map<number, CommunityChat>;
   private currentId: number;
   sessionStore: session.SessionStore;
 
@@ -48,10 +65,87 @@ export class MemStorage implements IStorage {
     this.books = new Map();
     this.chats = new Map();
     this.borrowRequests = new Map();
+    this.communities = new Map();
+    this.communityJoinRequests = new Map();
+    this.communityChats = new Map();
     this.currentId = 1;
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
+  }
+
+  // Implement new community methods
+  async getCommunities(): Promise<Community[]> {
+    return Array.from(this.communities.values());
+  }
+
+  async getCommunity(id: number): Promise<Community | undefined> {
+    return this.communities.get(id);
+  }
+
+  async createCommunity(insertCommunity: InsertCommunity): Promise<Community> {
+    const id = this.currentId++;
+    const community: Community = {
+      ...insertCommunity,
+      id,
+      createdAt: new Date(),
+    };
+    this.communities.set(id, community);
+    return community;
+  }
+
+  async getCommunityMembers(communityId: number): Promise<User[]> {
+    return Array.from(this.users.values()).filter(
+      (user) => user.communityId === communityId
+    );
+  }
+
+  async getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]> {
+    return Array.from(this.communityJoinRequests.values()).filter(
+      (request) => request.communityId === communityId
+    );
+  }
+
+  async createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest> {
+    const id = this.currentId++;
+    const joinRequest: CommunityJoinRequest = {
+      ...request,
+      id,
+      status: "pending",
+      createdAt: new Date(),
+    };
+    this.communityJoinRequests.set(id, joinRequest);
+    return joinRequest;
+  }
+
+  async updateJoinRequest(id: number, status: string): Promise<void> {
+    const request = this.communityJoinRequests.get(id);
+    if (!request) throw new Error("Join request not found");
+    request.status = status;
+    this.communityJoinRequests.set(id, request);
+  }
+
+  async getCommunityChats(communityId: number): Promise<CommunityChat[]> {
+    return Array.from(this.communityChats.values()).filter(
+      (chat) => chat.communityId === communityId
+    );
+  }
+
+  async createCommunityChat(insertChat: InsertCommunityChat): Promise<CommunityChat> {
+    const id = this.currentId++;
+    const chat: CommunityChat = {
+      ...insertChat,
+      id,
+      timestamp: new Date(),
+    };
+    this.communityChats.set(id, chat);
+    return chat;
+  }
+
+  async getBooksByCommunity(communityId: number): Promise<Book[]> {
+    return Array.from(this.books.values()).filter(
+      (book) => book.communityId === communityId
+    );
   }
 
   async getUser(id: number): Promise<User | undefined> {

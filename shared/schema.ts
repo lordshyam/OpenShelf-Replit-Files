@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   verified: boolean("verified").default(false),
   verificationCode: text("verification_code"),
   avatar: text("avatar"),
+  communityId: integer("community_id"),
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];
@@ -51,6 +52,7 @@ export const books = pgTable("books", {
   description: text("description"),
   googleBooksId: text("google_books_id"),
   ownerId: integer("owner_id").notNull(),
+  communityId: integer("community_id").notNull(),
   borrowed: boolean("borrowed").default(false),
   borrowerId: integer("borrower_id"),
   borrowDeadline: timestamp("borrow_deadline"),
@@ -75,6 +77,31 @@ export const chats = pgTable("chats", {
   message: text("message").notNull(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
   bookId: integer("book_id"),
+});
+
+export const communities = pgTable("communities", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  location: text("location").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: integer("created_by").notNull(),
+});
+
+export const communityJoinRequests = pgTable("community_join_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  communityId: integer("community_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const communityChats = pgTable("community_chats", {
+  id: serial("id").primaryKey(),
+  communityId: integer("community_id").notNull(),
+  userId: integer("user_id").notNull(),
+  message: text("message").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
 export const insertBookSchema = createInsertSchema(books).omit({
@@ -102,7 +129,22 @@ export const userPreferencesSchema = z.object({
   languages: z.array(z.string()),
 });
 
-// Available book genres
+export const insertCommunitySchema = createInsertSchema(communities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCommunityJoinRequestSchema = createInsertSchema(communityJoinRequests).omit({
+  id: true,
+  status: true,
+  createdAt: true,
+});
+
+export const insertCommunityChatSchema = createInsertSchema(communityChats).omit({
+  id: true,
+  timestamp: true,
+});
+
 export const bookGenres = [
   "Fiction",
   "Non-Fiction",
@@ -135,3 +177,9 @@ export type Book = typeof books.$inferSelect;
 export type BorrowRequest = typeof borrowRequests.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
+export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
+export type InsertCommunityJoinRequest = z.infer<typeof insertCommunityJoinRequestSchema>;
+export type InsertCommunityChat = z.infer<typeof insertCommunityChatSchema>;
+export type Community = typeof communities.$inferSelect;
+export type CommunityJoinRequest = typeof communityJoinRequests.$inferSelect;
+export type CommunityChat = typeof communityChats.$inferSelect;

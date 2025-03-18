@@ -10,6 +10,7 @@ import AuthPage from "@/pages/auth-page";
 import HomePage from "@/pages/home-page";
 import MyLibrary from "@/pages/my-library";
 import ChatPage from "@/pages/chat-page";
+import CommunitySelection from "@/pages/community-selection";
 import Navbar from "@/components/ui/navbar";
 
 function Router() {
@@ -17,10 +18,11 @@ function Router() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <Switch>
+        <Route path="/auth" component={AuthPage} />
+        <Route path="/select-community" component={CommunitySelection} />
         <ProtectedRoute path="/" component={HomePage} />
         <ProtectedRoute path="/library" component={MyLibrary} />
         <ProtectedRoute path="/chat" component={ChatPage} />
-        <Route path="/auth" component={AuthPage} />
         <Route component={NotFound} />
       </Switch>
     </div>
