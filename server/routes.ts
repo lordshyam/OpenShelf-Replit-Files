@@ -31,7 +31,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/books", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    // Check authentication first
+    if (!req.isAuthenticated()) {
+      console.log('User not authenticated:', req.user);
+      return res.status(401).json({ message: "Please login to list books" });
+    }
 
     const result = insertBookSchema.safeParse(req.body);
     if (!result.success) {
