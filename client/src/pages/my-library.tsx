@@ -240,24 +240,27 @@ export default function MyLibrary() {
                             </Button>
                           </label>
                         </div>
-                        <div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleImageCapture}
-                            className="hidden"
-                            id="camera-capture"
-                          />
-                          <label htmlFor="camera-capture">
-                            <Button type="button" variant="outline" className="w-full" asChild>
-                              <span>
-                                <Camera className="mr-2 h-4 w-4" />
-                                Take Photo
-                              </span>
-                            </Button>
-                          </label>
-                        </div>
+                        {/* Only show camera option on mobile devices */}
+                        {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                          <div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={handleImageCapture}
+                              className="hidden"
+                              id="camera-capture"
+                            />
+                            <label htmlFor="camera-capture">
+                              <Button type="button" variant="outline" className="w-full" asChild>
+                                <span>
+                                  <Camera className="mr-2 h-4 w-4" />
+                                  Take Photo
+                                </span>
+                              </Button>
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>

@@ -55,8 +55,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ownerId: req.user!.id,
     });
 
-    // Add 0.5 credits for listing book
-    await storage.updateUserCredits(req.user!.id, req.user!.credits + 0.5);
+    // Get current user's books count after adding new book
+    const userBooks = await storage.getBooksByOwner(req.user!.id);
+    const creditsToAdd = 0.5; // Fixed 0.5 credits per book
+
+    // Update user's credits
+    await storage.updateUserCredits(req.user!.id, req.user!.credits + creditsToAdd);
 
     // Broadcast credit update through WebSocket
     wss.clients.forEach((client) => {
@@ -64,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         client.send(JSON.stringify({
           type: 'CREDIT_UPDATE',
           userId: req.user!.id,
-          credits: req.user!.credits + 0.5
+          credits: req.user!.credits + creditsToAdd
         }));
       }
     });
