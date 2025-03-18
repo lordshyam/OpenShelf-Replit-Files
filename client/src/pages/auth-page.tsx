@@ -18,12 +18,18 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [pendingVerification, setPendingVerification] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false); // Added state for password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
-  if (user) {
-    setLocation("/");
-    return null;
-  }
+  useEffect(() => {
+    if (user) {
+      // If user has no community, redirect to community selection
+      if (!user.communityId) {
+        setLocation("/select-community");
+      } else {
+        setLocation("/");
+      }
+    }
+  }, [user, setLocation]);
 
   const loginForm = useForm<{ username: string; password: string }>({
     defaultValues: { username: "", password: "" },

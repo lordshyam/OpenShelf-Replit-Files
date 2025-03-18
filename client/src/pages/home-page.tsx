@@ -17,7 +17,12 @@ export default function HomePage() {
   const { user } = useAuth();
 
   const { data: books, isLoading, error } = useQuery<Book[]>({
-    queryKey: ["/api/books"],
+    queryKey: ["/api/books", user?.communityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/books?communityId=${user?.communityId}`);
+      return res.json();
+    },
+    enabled: !!user?.communityId,
     select: (books) => books.filter(book =>
       !book.borrowed && !book.donated && (
         book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,7 +37,7 @@ export default function HomePage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/books", user?.communityId] });
       toast({
         title: "Success",
         description: "Book added successfully",

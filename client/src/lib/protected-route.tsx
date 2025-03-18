@@ -29,5 +29,14 @@ export function ProtectedRoute({
     );
   }
 
-  return <Component />
+  // Check if user has joined a community
+  if (!user.communityId && path !== "/select-community") {
+    return (
+      <Route path={path}>
+        <Redirect to="/select-community" />
+      </Route>
+    );
+  }
+
+  return <Route path={path} component={Component} />;
 }
