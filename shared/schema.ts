@@ -31,8 +31,7 @@ export const insertUserSchema = createInsertSchema(users)
       .max(30, "Username must be less than 30 characters")
       .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers and underscores"),
     email: z.string()
-      .email("Please enter a valid email address")
-      .refine(email => email.endsWith('@gmail.com'), "Only Gmail addresses are allowed"),
+      .email("Please enter a valid email address"),
     password: z.string()
       .min(6, "Password must be at least 6 characters long")
       .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
