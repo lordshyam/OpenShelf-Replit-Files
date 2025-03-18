@@ -84,6 +84,32 @@ export function setupAuth(app: Express) {
     }
   });
 
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      }
+
+      // Check if user is verified
+      if (!user.verified) {
+        return res.status(401).json({ message: "Please verify your email first" });
+      }
+
+      // Set session cookie based on rememberMe flag
+      if (req.body.rememberMe) {
+        req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 days
+      } else {
+        req.session.cookie.maxAge = null; // Session cookie (expires when browser closes)
+      }
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(200).json(user);
+      });
+    })(req, res, next);
+  });
+
   app.post("/api/register", async (req, res, next) => {
     try {
       const result = insertUserSchema.safeParse(req.body);
@@ -163,24 +189,6 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-      if (err) return next(err);
-      if (!user) {
-        return res.status(401).json({ message: info?.message || "Invalid credentials" });
-      }
-
-      // Check if user is verified
-      if (!user.verified) {
-        return res.status(401).json({ message: "Please verify your email first" });
-      }
-
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(200).json(user);
-      });
-    })(req, res, next);
-  });
 
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {

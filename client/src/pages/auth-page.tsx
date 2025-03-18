@@ -7,11 +7,18 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen, Eye, EyeOff } from "lucide-react";
+
+interface LoginFormData {
+  username: string;
+  password: string;
+  rememberMe: boolean;
+}
 
 export default function AuthPage() {
   const { user, loginMutation } = useAuth();
@@ -31,8 +38,12 @@ export default function AuthPage() {
     }
   }, [user, setLocation]);
 
-  const loginForm = useForm<{ username: string; password: string }>({
-    defaultValues: { username: "", password: "" },
+  const loginForm = useForm<LoginFormData>({
+    defaultValues: { 
+      username: "", 
+      password: "",
+      rememberMe: false 
+    },
   });
 
   const registerForm = useForm<InsertUser>({
@@ -175,6 +186,21 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={loginForm.control}
+                        name="rememberMe"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal">Stay Logged In</FormLabel>
+                          </FormItem>
+                        )}
+                      />
                       <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
                         {loginMutation.isPending ? "Logging in..." : "Login"}
                       </Button>
@@ -226,7 +252,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input type="email" {...field} placeholder="Enter your Gmail address" />
+                              <Input type="email" {...field} placeholder="Enter your email address" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -239,7 +265,22 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} placeholder="Create a strong password" />
+                              <div className="relative">
+                                <Input 
+                                  type={showPassword ? "text" : "password"} 
+                                  {...field} 
+                                  placeholder="Create a strong password" 
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                  onMouseDown={() => setShowPassword(true)}
+                                  onMouseUp={() => setShowPassword(false)}
+                                  onMouseLeave={() => setShowPassword(false)}
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                              </div>
                             </FormControl>
                             <FormMessage className="text-sm text-muted-foreground">
                               Password must be at least 6 characters, include an uppercase letter and a number
