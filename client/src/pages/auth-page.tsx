@@ -29,7 +29,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      // If user has no community, redirect to community selection
+      // If user has no community, ask if they want to join one
       if (!user.communityId) {
         setLocation("/select-community");
       } else {
@@ -59,7 +59,6 @@ export default function AuthPage() {
     },
   });
 
-  // When pendingVerification changes, update form default values
   useEffect(() => {
     if (pendingVerification) {
       verificationForm.reset({ email: pendingVerification, code: "" });
@@ -85,7 +84,7 @@ export default function AuthPage() {
         title: "Success!",
         description: result.message,
       });
-      setPendingVerification(null); // Clear the pending verification
+      setPendingVerification(null); 
     } catch (error: any) {
       toast({
         title: "Verification failed",

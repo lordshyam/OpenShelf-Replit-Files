@@ -29,8 +29,8 @@ export function ProtectedRoute({
     );
   }
 
-  // Check if user has joined a community
-  if (!user.communityId && path !== "/select-community") {
+  // Only redirect to community selection if we're not already on that page
+  if (!user.communityId && path !== "/select-community" && path !== "/") {
     return (
       <Route path={path}>
         <Redirect to="/select-community" />

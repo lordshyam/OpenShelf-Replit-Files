@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCommunitySchema, type Community } from "@shared/schema";
-import { Search, PlusCircle, Users, Building } from "lucide-react";
+import { Search, PlusCircle, Users, Building, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -83,6 +83,14 @@ export default function CommunitySelection() {
     },
   });
 
+  const handleSkip = () => {
+    toast({
+      title: "Welcome to OpenShelf!",
+      description: "You can join a community anytime from your profile settings.",
+    });
+    setLocation("/");
+  };
+
   if (!user) {
     setLocation("/auth");
     return null;
@@ -94,12 +102,23 @@ export default function CommunitySelection() {
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-4">Welcome to OpenShelf</h1>
           <p className="text-muted-foreground">
-            Join your local community to start sharing and borrowing books
+            Join your local community to start sharing and borrowing books, or skip for now and explore the platform
           </p>
         </div>
 
         {!showCreateForm ? (
           <>
+            <div className="flex justify-center gap-4 mb-8">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleSkip}
+              >
+                Skip for Now
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+
             <div className="relative max-w-xl mx-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
