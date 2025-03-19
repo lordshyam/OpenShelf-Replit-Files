@@ -28,6 +28,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const community = await storage.createCommunity(result.data);
+
+    // Create initial community chat
+    const welcomeChat = await storage.createCommunityChat({
+      communityId: community.id,
+      userId: req.user!.id,
+      message: `Welcome to ${community.name}! This is your community's group chat.`
+    });
+
+    // Broadcast the welcome message
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'COMMUNITY_CHAT',
+          chat: welcomeChat,
+          communityName: community.name
+        }));
+      }
+    });
+
     res.status(201).json(community);
   });
 
@@ -53,6 +72,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (community.createdBy === req.user!.id) {
       await storage.updateJoinRequest(request.id, "accepted");
       await storage.updateUser(req.user!.id, { communityId });
+
+      // Add welcome message to community chat
+      const joinChat = await storage.createCommunityChat({
+        communityId,
+        userId: req.user!.id,
+        message: `${req.user!.username} has joined the community!`
+      });
+
+      // Broadcast the join message
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'COMMUNITY_CHAT',
+            chat: joinChat,
+            communityName: community.name
+          }));
+        }
+      });
+
       return res.json({ message: "Joined community successfully" });
     }
 

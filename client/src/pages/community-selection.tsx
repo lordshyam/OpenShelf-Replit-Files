@@ -84,6 +84,7 @@ export default function CommunitySelection() {
   });
 
   const handleSkip = () => {
+    sessionStorage.setItem('skipCommunity', 'true');
     toast({
       title: "Welcome to OpenShelf!",
       description: "You can join a community anytime from your profile settings.",

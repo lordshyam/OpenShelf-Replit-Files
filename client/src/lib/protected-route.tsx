@@ -29,8 +29,8 @@ export function ProtectedRoute({
     );
   }
 
-  // Only redirect to community selection if we're not already on that page
-  if (!user.communityId && path !== "/select-community" && path !== "/") {
+  // Only redirect to community selection during the initial login flow
+  if (!user.communityId && path !== "/select-community" && path !== "/" && !sessionStorage.getItem('skipCommunity')) {
     return (
       <Route path={path}>
         <Redirect to="/select-community" />
