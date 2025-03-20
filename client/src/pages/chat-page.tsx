@@ -21,14 +21,6 @@ type ChatRoom = {
   avatar?: string;
 };
 
-type CommunityMessage = {
-  id: number;
-  communityId: number;
-  userId: number;
-  message: string;
-  timestamp: Date;
-};
-
 export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -39,6 +31,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [communityMessage, setCommunityMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const communityScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: books } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -52,7 +45,7 @@ export default function ChatPage() {
     queryKey: ["/api/chats", user?.id],
   });
 
-  const { data: communityChats } = useQuery<CommunityChat[]>({
+  const { data: communityChats, isLoading: loadingCommunityChats } = useQuery<CommunityChat[]>({
     queryKey: ["/api/community-chats", user?.communityId],
     enabled: !!user?.communityId,
   });
@@ -116,11 +109,19 @@ export default function ChatPage() {
     }
   }, [activeChat, chats, user?.id]);
 
+  // Auto-scroll effect for private chats
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Auto-scroll effect for community chats
+  useEffect(() => {
+    if (communityScrollRef.current) {
+      communityScrollRef.current.scrollTop = communityScrollRef.current.scrollHeight;
+    }
+  }, [communityChats]);
 
   const sendMessage = () => {
     if (!newMessage.trim() || !activeChat) return;
@@ -151,60 +152,13 @@ export default function ChatPage() {
     setCommunityMessage("");
   };
 
-
-  const acceptRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      await apiRequest("POST", `/api/borrow-requests/${requestId}/accept`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/chats", user?.id] });
-      toast({
-        title: "Success",
-        description: "Borrow request accepted. You can now chat with the borrower.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const declineRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      await apiRequest("POST", `/api/borrow-requests/${requestId}/decline`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests"] });
-      toast({
-        title: "Success",
-        description: "Borrow request declined",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  if (loadingRequests || loadingChats) {
+  if (loadingRequests || loadingChats || loadingCommunityChats) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
-
-  const pendingRequests = borrowRequests?.filter(
-    req => books?.find(b => b.id === req.bookId)?.ownerId === user?.id && req.status === "pending"
-  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -213,15 +167,15 @@ export default function ChatPage() {
           <CardTitle>Messages</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="private" className="h-full">
+          <Tabs defaultValue="private" className="h-[calc(100%-2rem)]">
             <TabsList>
               <TabsTrigger value="private">Private Chats</TabsTrigger>
               <TabsTrigger value="community">Community Chat</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="private" className="h-[calc(100%-40px)]">
+            <TabsContent value="private" className="h-[calc(100%-3rem)]">
               <div className="flex h-full gap-4">
-                <div className="w-64 border-r">
+                <div className="w-64 border-r overflow-y-auto">
                   {chatRooms.map(room => (
                     <div
                       key={room.userId}
@@ -261,7 +215,7 @@ export default function ChatPage() {
                 <div className="flex-1 flex flex-col">
                   {activeChat ? (
                     <>
-                      <ScrollArea ref={scrollRef} className="flex-1 pr-4">
+                      <div ref={scrollRef} className="flex-1 overflow-y-auto pr-4">
                         <div className="space-y-4">
                           {messages.map((msg, i) => (
                             <div
@@ -283,7 +237,7 @@ export default function ChatPage() {
                             </div>
                           ))}
                         </div>
-                      </ScrollArea>
+                      </div>
 
                       <div className="flex items-center space-x-2 mt-4">
                         <Input
@@ -306,9 +260,9 @@ export default function ChatPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="community" className="h-[calc(100%-40px)]">
+            <TabsContent value="community" className="h-[calc(100%-3rem)]">
               <div className="flex flex-col h-full">
-                <ScrollArea className="flex-1 pr-4">
+                <div ref={communityScrollRef} className="flex-1 overflow-y-auto pr-4">
                   <div className="space-y-4">
                     {communityChats?.map((msg, i) => (
                       <div
@@ -330,7 +284,7 @@ export default function ChatPage() {
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
 
                 <div className="flex items-center space-x-2 mt-4">
                   <Input
