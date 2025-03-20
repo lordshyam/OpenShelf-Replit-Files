@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Chat, BorrowRequest, type Book, type CommunityChat } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { Chat, type Book, type CommunityChat } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, Check, X, BookOpen } from "lucide-react";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Send, Loader2, BookOpen } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type ChatRoom = {
@@ -18,13 +16,12 @@ type ChatRoom = {
   lastMessage?: string;
   bookId?: number;
   bookTitle?: string;
-  avatar?: string;
 };
 
 export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { send } = useWebSocket();
+  const { send, connectionStatus } = useWebSocket();
   const [activeChat, setActiveChat] = useState<number | null>(null);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [messages, setMessages] = useState<Chat[]>([]);
@@ -37,10 +34,6 @@ export default function ChatPage() {
     queryKey: ["/api/books"],
   });
 
-  const { data: borrowRequests, isLoading: loadingRequests } = useQuery<BorrowRequest[]>({
-    queryKey: ["/api/borrow-requests"],
-  });
-
   const { data: chats, isLoading: loadingChats } = useQuery<Chat[]>({
     queryKey: ["/api/chats", user?.id],
   });
@@ -50,52 +43,31 @@ export default function ChatPage() {
     enabled: !!user?.communityId,
   });
 
-  const storage = {
-    async getUser(userId: number): Promise<{ avatar?: string } | null> {
-      try {
-        const response = await fetch(`/api/users/${userId}`);
-        if (!response.ok) {
-          return null;
-        }
-        const data = await response.json();
-        return { avatar: data.avatar };
-      } catch (error) {
-        console.error("Error fetching user:", error);
-        return null;
-      }
-    }
-  };
-
   useEffect(() => {
     if (chats && books) {
       const rooms = new Map<number, ChatRoom>();
-      const fetchRooms = async () => {
-        for (const chat of chats) {
-          const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
-          const otherUser = await storage.getUser(otherUserId);
-          const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
+      for (const chat of chats) {
+        const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
+        const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
 
-          if (!rooms.has(otherUserId)) {
-            rooms.set(otherUserId, {
-              userId: otherUserId,
-              username: `User #${otherUserId}`,
-              lastMessage: chat.message,
-              bookId: chat.bookId,
-              bookTitle: book?.title,
-              avatar: otherUser?.avatar
-            });
-          } else {
-            const room = rooms.get(otherUserId)!;
-            room.lastMessage = chat.message;
-            if (!room.bookId && chat.bookId) {
-              room.bookId = chat.bookId;
-              room.bookTitle = book?.title;
-            }
+        if (!rooms.has(otherUserId)) {
+          rooms.set(otherUserId, {
+            userId: otherUserId,
+            username: `User #${otherUserId}`,
+            lastMessage: chat.message,
+            bookId: chat.bookId,
+            bookTitle: book?.title
+          });
+        } else {
+          const room = rooms.get(otherUserId)!;
+          room.lastMessage = chat.message;
+          if (!room.bookId && chat.bookId) {
+            room.bookId = chat.bookId;
+            room.bookTitle = book?.title;
           }
         }
-        setChatRooms(Array.from(rooms.values()));
       }
-      fetchRooms();
+      setChatRooms(Array.from(rooms.values()));
     }
   }, [chats, books, user?.id]);
 
@@ -109,14 +81,12 @@ export default function ChatPage() {
     }
   }, [activeChat, chats, user?.id]);
 
-  // Auto-scroll effect for private chats
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Auto-scroll effect for community chats
   useEffect(() => {
     if (communityScrollRef.current) {
       communityScrollRef.current.scrollTop = communityScrollRef.current.scrollHeight;
@@ -126,15 +96,13 @@ export default function ChatPage() {
   const sendMessage = () => {
     if (!newMessage.trim() || !activeChat) return;
 
-    const message = {
+    send({
       senderId: user!.id,
       receiverId: activeChat,
       message: newMessage,
-      bookId: chatRooms.find(room => room.userId === activeChat)?.bookId,
-      timestamp: new Date().toISOString()
-    };
+      bookId: chatRooms.find(room => room.userId === activeChat)?.bookId
+    });
 
-    send(message);
     setNewMessage("");
   };
 
@@ -145,14 +113,13 @@ export default function ChatPage() {
       type: 'COMMUNITY_MESSAGE',
       communityId: user.communityId,
       userId: user.id,
-      message: communityMessage,
-      timestamp: new Date().toISOString()
+      message: communityMessage
     });
 
     setCommunityMessage("");
   };
 
-  if (loadingRequests || loadingChats || loadingCommunityChats) {
+  if (loadingChats || loadingCommunityChats) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -185,16 +152,9 @@ export default function ChatPage() {
                       onClick={() => setActiveChat(room.userId)}
                     >
                       <div className="flex items-center gap-2">
-                        {room.avatar ? (
-                          <div
-                            className="w-8 h-8 rounded-full"
-                            style={{ backgroundImage: `url(${room.avatar})`, backgroundSize: 'cover' }}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
-                            {room.username.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                          {room.username.charAt(0).toUpperCase()}
+                        </div>
                         <div className="font-medium">{room.username}</div>
                       </div>
                       {room.bookTitle && (
@@ -300,42 +260,6 @@ export default function ChatPage() {
               </div>
             </TabsContent>
           </Tabs>
-          {pendingRequests && pendingRequests.length > 0 && (
-            <div className="space-y-4 mt-4 bg-muted p-4 rounded-lg">
-              <h3 className="font-semibold">Pending Borrow Requests</h3>
-              {pendingRequests.map(request => {
-                const book = books?.find(b => b.id === request.bookId);
-                return (
-                  <div key={request.id} className="flex items-center justify-between bg-background p-3 rounded-md">
-                    <div>
-                      <p className="font-medium">{book?.title}</p>
-                      <p className="text-sm text-muted-foreground">Request from user #{request.requesterId}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => acceptRequestMutation.mutate(request.id)}
-                        disabled={acceptRequestMutation.isPending}
-                      >
-                        <Check className="h-4 w-4 mr-1" />
-                        Accept
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => declineRequestMutation.mutate(request.id)}
-                        disabled={declineRequestMutation.isPending}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Decline
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

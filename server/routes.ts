@@ -64,10 +64,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
   });
 
   // Community routes
@@ -121,57 +117,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Community not found" });
     }
 
-    // Create a join request
-    const request = await storage.createJoinRequest({
-      userId: req.user!.id,
-      communityId
-    });
+    // Update user's community
+    await storage.updateUser(req.user!.id, { communityId });
 
-    // If the user is the creator of the community, auto-approve
-    if (community.createdBy === req.user!.id) {
-      await storage.updateJoinRequest(request.id, "accepted");
-      await storage.updateUser(req.user!.id, { communityId });
-
-      // Add welcome message to community chat
-      const joinChat = await storage.createCommunityChat({
-        communityId,
-        userId: req.user!.id,
-        message: `${req.user!.username} has joined the community!`
-      });
-
-      // Broadcast the join message
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({
-            type: 'COMMUNITY_CHAT',
-            chat: joinChat,
-            communityName: community.name
-          }));
-        }
-      });
-
-      return res.json({ message: "Joined community successfully" });
-    }
-
-    // Notify community creator about the join request
-    const chat = await storage.createCommunityChat({
+    // Add welcome message to community chat
+    const joinChat = await storage.createCommunityChat({
       communityId,
       userId: req.user!.id,
-      message: `${req.user!.username} has requested to join the community.`
+      message: `${req.user!.username} has joined the community!`
     });
 
-    // Broadcast the chat message
+    // Broadcast the join message
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
-          type: 'COMMUNITY_JOIN_REQUEST',
-          request,
-          username: req.user!.username
+          type: 'COMMUNITY_CHAT',
+          chat: joinChat,
+          communityName: community.name
         }));
       }
     });
 
-    res.status(201).json(request);
+    return res.json({ message: "Joined community successfully" });
+  });
+
+  // Get community chats endpoint
+  app.get("/api/community-chats/:communityId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const communityId = parseInt(req.params.communityId);
+    const chats = await storage.getCommunityChats(communityId);
+    res.json(chats);
   });
 
   // User preferences
@@ -394,15 +370,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendStatus(200);
   });
 
-
-  // Add endpoint to get community chats
-  app.get("/api/community-chats/:communityId", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const communityId = parseInt(req.params.communityId);
-    const chats = await storage.getCommunityChats(communityId);
-    res.json(chats);
-  });
 
   return httpServer;
 }
