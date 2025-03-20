@@ -395,5 +395,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Add endpoint to get community chats
+  app.get("/api/community-chats/:communityId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const communityId = parseInt(req.params.communityId);
+    const chats = await storage.getCommunityChats(communityId);
+    res.json(chats);
+  });
+
   return httpServer;
 }

@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Chat, BorrowRequest, type Book } from "@shared/schema";
+import { Chat, BorrowRequest, type Book, type CommunityChat } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, Check, X, BookOpen } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -52,7 +52,7 @@ export default function ChatPage() {
     queryKey: ["/api/chats", user?.id],
   });
 
-  const { data: communityChats } = useQuery<CommunityMessage[]>({
+  const { data: communityChats } = useQuery<CommunityChat[]>({
     queryKey: ["/api/community-chats", user?.communityId],
     enabled: !!user?.communityId,
   });
