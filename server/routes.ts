@@ -11,6 +11,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
+  // WebSocket connection handling
+  wss.on('connection', (ws) => {
+    console.log('New WebSocket connection established');
+
+    // Send initial connection confirmation
+    ws.send(JSON.stringify({
+      type: 'CONNECTION_STATUS',
+      status: 'connected'
+    }));
+
+    ws.on('message', async (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+
+        if (message.type === 'COMMUNITY_MESSAGE') {
+          const chat = await storage.createCommunityChat({
+            communityId: message.communityId,
+            userId: message.userId,
+            message: message.message
+          });
+
+          // Broadcast to all clients in the same community
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'COMMUNITY_CHAT',
+                chat,
+                communityName: message.communityName
+              }));
+            }
+          });
+        } else {
+          const chat = await storage.createChat(message);
+
+          // Broadcast to all clients
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'CHAT_MESSAGE',
+                chat,
+                bookTitle: message.bookTitle || "Chat message"
+              }));
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error processing message:', err);
+        ws.send(JSON.stringify({
+          type: 'ERROR',
+          message: 'Failed to process message'
+        }));
+      }
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+
   // Community routes
   app.get("/api/communities", async (req, res) => {
     const communities = await storage.getCommunities();
@@ -335,28 +394,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendStatus(200);
   });
 
-  // Chat websocket
-  wss.on('connection', (ws) => {
-    ws.on('message', async (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        const chat = await storage.createChat(message);
-
-        // Broadcast to all clients
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-              type: 'CHAT_MESSAGE',
-              chat,
-              bookTitle: "Chat message"
-            }));
-          }
-        });
-      } catch (err) {
-        console.error('Error processing message:', err);
-      }
-    });
-  });
 
   return httpServer;
 }
