@@ -143,6 +143,8 @@ export default function MyLibrary() {
                   <form 
                     onSubmit={form.handleSubmit((data) => {
                       addBookMutation.mutate(data);
+                      setDialogOpen(false);
+                      form.reset();
                     })} 
                     className="space-y-4 pb-2"
                   >
