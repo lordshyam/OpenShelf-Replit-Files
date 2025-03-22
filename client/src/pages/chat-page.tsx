@@ -134,131 +134,133 @@ export default function ChatPage() {
           <CardTitle>Messages</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="private" className="h-[calc(100%-2rem)]">
+          <Tabs defaultValue="private">
             <TabsList>
               <TabsTrigger value="private">Private Chats</TabsTrigger>
               <TabsTrigger value="community">Community Chat</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="private" className="h-[calc(100%-3rem)]">
-              <div className="flex h-full gap-4">
-                <div className="w-64 border-r overflow-y-auto">
-                  {chatRooms.map(room => (
-                    <div
-                      key={room.userId}
-                      className={`p-3 cursor-pointer hover:bg-accent ${
-                        activeChat === room.userId ? 'bg-accent' : ''
-                      }`}
-                      onClick={() => setActiveChat(room.userId)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
-                          {room.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="font-medium">{room.username}</div>
-                      </div>
-                      {room.bookTitle && (
-                        <div className="flex items-center text-xs text-primary gap-1 mb-1 ml-10">
-                          <BookOpen className="h-3 w-3" />
-                          <span>{room.bookTitle}</span>
-                        </div>
-                      )}
-                      {room.lastMessage && (
-                        <div className="text-sm text-muted-foreground truncate ml-10">
-                          {room.lastMessage}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex-1 flex flex-col">
-                  {activeChat ? (
-                    <>
-                      <div ref={scrollRef} className="flex-1 overflow-y-auto pr-4">
-                        <div className="space-y-4">
-                          {messages.map((msg, i) => (
-                            <div
-                              key={i}
-                              className={`flex ${msg.senderId === user!.id ? "justify-end" : "justify-start"}`}
-                            >
-                              <div
-                                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                                  msg.senderId === user!.id
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted"
-                                }`}
-                              >
-                                <p className="text-sm">{msg.message}</p>
-                                <span className="text-xs opacity-70">
-                                  {new Date(msg.timestamp).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2 mt-4">
-                        <Input
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          placeholder="Type your message..."
-                          onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                        />
-                        <Button onClick={sendMessage} disabled={!newMessage.trim()}>
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Select a chat to start messaging
-                    </div>
-                  )}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="community" className="h-[calc(100%-3rem)]">
-              <div className="flex flex-col h-full">
-                <div ref={communityScrollRef} className="flex-1 overflow-y-auto pr-4">
-                  <div className="space-y-4">
-                    {communityChats?.map((msg, i) => (
+            <div className="mt-4 h-[calc(100vh-16rem)]">
+              <TabsContent value="private" className="h-full">
+                <div className="flex h-full gap-4">
+                  <div className="w-64 border-r overflow-y-auto">
+                    {chatRooms.map(room => (
                       <div
-                        key={i}
-                        className={`flex ${msg.userId === user!.id ? "justify-end" : "justify-start"}`}
+                        key={room.userId}
+                        className={`p-3 cursor-pointer hover:bg-accent ${
+                          activeChat === room.userId ? 'bg-accent' : ''
+                        }`}
+                        onClick={() => setActiveChat(room.userId)}
                       >
-                        <div
-                          className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                            msg.userId === user!.id
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted"
-                          }`}
-                        >
-                          <p className="text-sm">{msg.message}</p>
-                          <span className="text-xs opacity-70">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                            {room.username.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="font-medium">{room.username}</div>
                         </div>
+                        {room.bookTitle && (
+                          <div className="flex items-center text-xs text-primary gap-1 mb-1 ml-10">
+                            <BookOpen className="h-3 w-3" />
+                            <span>{room.bookTitle}</span>
+                          </div>
+                        )}
+                        {room.lastMessage && (
+                          <div className="text-sm text-muted-foreground truncate ml-10">
+                            {room.lastMessage}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2 mt-4">
-                  <Input
-                    value={communityMessage}
-                    onChange={(e) => setCommunityMessage(e.target.value)}
-                    placeholder="Type your message to the community..."
-                    onKeyPress={(e) => e.key === "Enter" && sendCommunityMessage()}
-                  />
-                  <Button onClick={sendCommunityMessage} disabled={!communityMessage.trim()}>
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  <div className="flex-1 flex flex-col">
+                    {activeChat ? (
+                      <>
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto pr-4">
+                          <div className="space-y-4">
+                            {messages.map((msg, i) => (
+                              <div
+                                key={i}
+                                className={`flex ${msg.senderId === user!.id ? "justify-end" : "justify-start"}`}
+                              >
+                                <div
+                                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                                    msg.senderId === user!.id
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted"
+                                  }`}
+                                >
+                                  <p className="text-sm">{msg.message}</p>
+                                  <span className="text-xs opacity-70">
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 mt-4">
+                          <Input
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            placeholder="Type your message..."
+                            onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                          />
+                          <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        Select a chat to start messaging
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
+
+              <TabsContent value="community" className="h-full">
+                <div className="flex flex-col h-full">
+                  <div ref={communityScrollRef} className="flex-1 overflow-y-auto pr-4">
+                    <div className="space-y-4">
+                      {communityChats?.map((msg, i) => (
+                        <div
+                          key={i}
+                          className={`flex ${msg.userId === user!.id ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                              msg.userId === user!.id
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted"
+                            }`}
+                          >
+                            <p className="text-sm">{msg.message}</p>
+                            <span className="text-xs opacity-70">
+                              {new Date(msg.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 mt-4">
+                    <Input
+                      value={communityMessage}
+                      onChange={(e) => setCommunityMessage(e.target.value)}
+                      placeholder="Type your message to the community..."
+                      onKeyPress={(e) => e.key === "Enter" && sendCommunityMessage()}
+                    />
+                    <Button onClick={sendCommunityMessage} disabled={!communityMessage.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+            </div>
           </Tabs>
         </CardContent>
       </Card>
