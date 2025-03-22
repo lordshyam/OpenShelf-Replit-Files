@@ -32,6 +32,7 @@ export default function MyLibrary() {
       genre: "Fiction",
       imageUrl: ""
     },
+    mode: "onChange"
   });
 
   const { data: myBooks, isLoading: loadingBooks } = useQuery<Book[]>({
@@ -108,6 +109,14 @@ export default function MyLibrary() {
   };
 
   const onSubmit = (data: InsertBook) => {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "Please login to add books",
+        variant: "destructive",
+      });
+      return;
+    }
     addBookMutation.mutate(data);
   };
 
@@ -276,10 +285,10 @@ export default function MyLibrary() {
                         )}
                       </div>
                     </div>
-                    <Button 
+                    <Button
                       type="submit"
                       className="w-full"
-                      disabled={addBookMutation.isPending || !form.formState.isValid}
+                      disabled={addBookMutation.isPending}
                     >
                       {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
                     </Button>
