@@ -29,7 +29,6 @@ export default function MyLibrary() {
       description: "",
       condition: "good",
       genre: "Fiction",
-      ownerId: user?.id,
       imageUrl: ""
     },
   });
@@ -47,6 +46,10 @@ export default function MyLibrary() {
   const addBookMutation = useMutation({
     mutationFn: async (bookData: InsertBook) => {
       const res = await apiRequest("POST", "/api/books", bookData);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to add book");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -126,7 +129,14 @@ export default function MyLibrary() {
                   <DialogTitle>Add a New Book</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((data) => addBookMutation.mutate(data))} className="space-y-4 pb-2">
+                  <form onSubmit={form.handleSubmit((data) => {
+                    // Ensure we set the ownerId before submitting
+                    const bookData = {
+                      ...data,
+                      ownerId: user?.id
+                    };
+                    addBookMutation.mutate(bookData);
+                  })} className="space-y-4 pb-2">
                     <FormField
                       control={form.control}
                       name="title"

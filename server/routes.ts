@@ -32,9 +32,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: message.message
           });
 
-          // Broadcast to all clients in the same community
+          // Save the message first
+          await storage.createCommunityChat(chat);
+
+          // Broadcast to all clients except the sender
           wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({
                 type: 'COMMUNITY_CHAT',
                 chat,
@@ -42,12 +45,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
           });
+
+          // Send confirmation back to sender
+          ws.send(JSON.stringify({
+            type: 'COMMUNITY_CHAT_CONFIRMED',
+            chat
+          }));
         } else {
           const chat = await storage.createChat(message);
 
-          // Broadcast to all clients
+          // Broadcast to all clients except sender for private messages
           wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({
                 type: 'CHAT_MESSAGE',
                 chat,
@@ -55,6 +64,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
           });
+
+          // Send confirmation to sender
+          ws.send(JSON.stringify({
+            type: 'CHAT_MESSAGE_CONFIRMED',
+            chat
+          }));
         }
       } catch (err) {
         console.error('Error processing message:', err);
