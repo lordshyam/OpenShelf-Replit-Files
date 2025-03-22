@@ -50,21 +50,17 @@ export default function MyLibrary() {
         throw new Error("Please login to add books");
       }
 
-      try {
-        const res = await apiRequest("POST", "/api/books", {
-          ...bookData,
-          ownerId: user.id
-        });
+      const res = await apiRequest("POST", "/api/books", {
+        ...bookData,
+        ownerId: user.id
+      });
 
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.message || "Failed to add book");
-        }
-        return res.json();
-      } catch (err) {
-        console.error("Book mutation error:", err);
-        throw err;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to add book");
       }
+
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
@@ -111,6 +107,10 @@ export default function MyLibrary() {
     }));
   };
 
+  const onSubmit = (data: InsertBook) => {
+    addBookMutation.mutate(data);
+  };
+
   if (loadingBooks || loadingBorrowed) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -140,14 +140,7 @@ export default function MyLibrary() {
                   <DialogTitle>Add a New Book</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                  <form 
-                    onSubmit={form.handleSubmit((data) => {
-                      addBookMutation.mutate(data);
-                      setDialogOpen(false);
-                      form.reset();
-                    })} 
-                    className="space-y-4 pb-2"
-                  >
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                     <FormField
                       control={form.control}
                       name="title"
@@ -205,7 +198,7 @@ export default function MyLibrary() {
                         <FormItem>
                           <FormLabel>Description</FormLabel>
                           <FormControl>
-                            <Textarea {...field} className="min-h-[100px]" />
+                            <Textarea {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -284,9 +277,9 @@ export default function MyLibrary() {
                       </div>
                     </div>
                     <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={addBookMutation.isPending}
+                      type="submit"
+                      className="w-full"
+                      disabled={addBookMutation.isPending || !form.formState.isValid}
                     >
                       {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
                     </Button>
