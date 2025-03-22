@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Plus, BookOpen, Clock, Loader2, Library, Upload, Camera } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
 
 export default function MyLibrary() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const form = useForm<InsertBook>({
     resolver: zodResolver(insertBookSchema),
@@ -45,7 +46,13 @@ export default function MyLibrary() {
 
   const addBookMutation = useMutation({
     mutationFn: async (bookData: InsertBook) => {
-      const res = await apiRequest("POST", "/api/books", bookData);
+      if (!user?.id) throw new Error("User not authenticated");
+
+      const res = await apiRequest("POST", "/api/books", {
+        ...bookData,
+        ownerId: user.id
+      });
+
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || "Failed to add book");
@@ -60,6 +67,7 @@ export default function MyLibrary() {
       });
       form.reset();
       setImagePreview(null);
+      setDialogOpen(false);
     },
     onError: (error: Error) => {
       toast({
@@ -70,19 +78,11 @@ export default function MyLibrary() {
     },
   });
 
-  if (loadingBooks || loadingBorrowed) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+    if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Image too large",
         description: "Please choose an image under 5MB",
@@ -91,22 +91,26 @@ export default function MyLibrary() {
       return;
     }
 
-    // Create a preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
 
-    // Convert to base64 for storage
-    const base64 = await new Promise<string>((resolve) => {
+    form.setValue("imageUrl", await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
       reader.readAsDataURL(file);
-    });
-
-    form.setValue("imageUrl", base64);
+    }));
   };
+
+  if (loadingBooks || loadingBorrowed) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,7 +121,7 @@ export default function MyLibrary() {
               <Library className="h-8 w-8" />
               <h1 className="text-3xl font-bold">My Library</h1>
             </div>
-            <Dialog>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="secondary">
                   <Plus className="mr-2 h-4 w-4" />
@@ -129,14 +133,12 @@ export default function MyLibrary() {
                   <DialogTitle>Add a New Book</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((data) => {
-                    // Ensure we set the ownerId before submitting
-                    const bookData = {
-                      ...data,
-                      ownerId: user?.id
-                    };
-                    addBookMutation.mutate(bookData);
-                  })} className="space-y-4 pb-2">
+                  <form 
+                    onSubmit={form.handleSubmit((data) => {
+                      addBookMutation.mutate(data);
+                    })} 
+                    className="space-y-4 pb-2"
+                  >
                     <FormField
                       control={form.control}
                       name="title"
@@ -250,7 +252,6 @@ export default function MyLibrary() {
                             </Button>
                           </label>
                         </div>
-                        {/* Only show camera option on mobile devices */}
                         {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
                           <div>
                             <input
@@ -273,7 +274,11 @@ export default function MyLibrary() {
                         )}
                       </div>
                     </div>
-                    <Button type="submit" className="w-full" disabled={addBookMutation.isPending}>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={addBookMutation.isPending}
+                    >
                       {addBookMutation.isPending ? "Adding Book..." : "Add Book"}
                     </Button>
                   </form>
