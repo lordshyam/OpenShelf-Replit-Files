@@ -46,18 +46,25 @@ export default function MyLibrary() {
 
   const addBookMutation = useMutation({
     mutationFn: async (bookData: InsertBook) => {
-      if (!user?.id) throw new Error("User not authenticated");
-
-      const res = await apiRequest("POST", "/api/books", {
-        ...bookData,
-        ownerId: user.id
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to add book");
+      if (!user?.id) {
+        throw new Error("Please login to add books");
       }
-      return res.json();
+
+      try {
+        const res = await apiRequest("POST", "/api/books", {
+          ...bookData,
+          ownerId: user.id
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Failed to add book");
+        }
+        return res.json();
+      } catch (err) {
+        console.error("Book mutation error:", err);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
@@ -72,7 +79,7 @@ export default function MyLibrary() {
     onError: (error: Error) => {
       toast({
         title: "Error adding book",
-        description: error.message,
+        description: error.message || "Failed to add book. Please try again.",
         variant: "destructive",
       });
     },
