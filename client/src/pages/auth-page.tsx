@@ -13,12 +13,20 @@ import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen, Eye, EyeOff } from "lucide-react";
+import { z } from 'zod';
 
 interface LoginFormData {
   username: string;
   password: string;
   rememberMe: boolean;
 }
+
+// Create a schema for login validation
+const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean().default(false)
+});
 
 export default function AuthPage() {
   const { user, loginMutation } = useAuth();
@@ -29,7 +37,6 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      // If user has no community, ask if they want to join one
       if (!user.communityId) {
         setLocation("/select-community");
       } else {
@@ -39,6 +46,7 @@ export default function AuthPage() {
   }, [user, setLocation]);
 
   const loginForm = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
     defaultValues: { 
       username: "", 
       password: "",
@@ -127,7 +135,7 @@ export default function AuthPage() {
                     <Button
                       type="submit"
                       className="w-full"
-                      disabled={!verificationForm.formState.isValid || verificationForm.formState.isSubmitting}
+                      disabled={verificationForm.formState.isSubmitting}
                     >
                       {verificationForm.formState.isSubmitting ? "Verifying..." : "Verify Email"}
                     </Button>
@@ -200,7 +208,7 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+                      <Button type="submit" className="w-full">
                         {loginMutation.isPending ? "Logging in..." : "Login"}
                       </Button>
                     </form>
@@ -281,13 +289,11 @@ export default function AuthPage() {
                                 </button>
                               </div>
                             </FormControl>
-                            <FormMessage className="text-sm text-muted-foreground">
-                              Password must be at least 6 characters, include an uppercase letter and a number
-                            </FormMessage>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full" disabled={registerForm.formState.isSubmitting}>
+                      <Button type="submit" className="w-full">
                         {registerForm.formState.isSubmitting ? "Creating account..." : "Create Account"}
                       </Button>
                     </form>
