@@ -85,22 +85,17 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) {
         return res.status(401).json({ message: info?.message || "Invalid credentials" });
-      }
-
-      // Check if user is verified
-      if (!user.verified) {
-        return res.status(401).json({ message: "Please verify your email first" });
       }
 
       // Set session cookie based on rememberMe flag
       if (req.body.rememberMe) {
         req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 days
       } else {
-        req.session.cookie.maxAge = null; // Session cookie (expires when browser closes)
+        req.session.cookie.expires = undefined; // Session cookie (expires when browser closes)
       }
 
       req.login(user, (err) => {
@@ -130,27 +125,27 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      // Generate verification code
-      const verificationCode = generateVerificationCode();
-
-      // Create unverified user
+      // Create the user with default values (verified: false)
       const user = await storage.createUser({
         ...result.data,
         password: await hashPassword(result.data.password),
-        verificationCode,
       });
 
-      // Send verification email
-      try {
-        await sendVerificationEmail(email, verificationCode);
-      } catch (err) {
-        console.error('Failed to send verification email:', err);
-        return res.status(500).json({ message: "Failed to send verification email" });
+      // Immediately update the user to be verified
+      await storage.updateUser(user.id, { verified: true });
+
+      // Get the updated user
+      const updatedUser = await storage.getUser(user.id);
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to retrieve updated user" });
       }
 
-      res.status(201).json({ 
-        message: "Registration successful. Please check your email for verification code.",
-        email
+      // Log in the user immediately after registration
+      req.login(updatedUser, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Error logging in after registration" });
+        }
+        res.status(201).json(updatedUser);
       });
     } catch (err) {
       next(err);
