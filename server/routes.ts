@@ -10,6 +10,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // User endpoint to get current authenticated user
+  app.get("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    
+    // Get fresh user data to ensure we have the latest community info
+    const user = await storage.getUser(req.user!.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    return res.json(user);
+  });
 
   // WebSocket connection handling
   wss.on('connection', (ws) => {
@@ -208,9 +223,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "You have already listed this book" });
     }
 
+    // Get user to check community membership
+    const user = await storage.getUser(req.user!.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (!user.communityId) {
+      return res.status(400).json({ message: "Please join a community before adding books" });
+    }
+    
     const book = await storage.createBook({
       ...result.data,
       ownerId: req.user!.id,
+      communityId: user.communityId,
     });
 
     // Get current user's books count after adding new book

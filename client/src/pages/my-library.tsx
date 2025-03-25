@@ -31,8 +31,7 @@ export default function MyLibrary() {
       condition: "good",
       genre: "Fiction",
       imageUrl: "",
-      ownerId: user?.id || 0,
-      communityId: user?.communityId || 0
+      ownerId: user?.id || 0
     },
     mode: "onChange"
   });
@@ -59,8 +58,7 @@ export default function MyLibrary() {
 
       const res = await apiRequest("POST", "/api/books", {
         ...bookData,
-        ownerId: user.id,
-        communityId: user.communityId
+        ownerId: user.id
       });
 
       if (!res.ok) {
