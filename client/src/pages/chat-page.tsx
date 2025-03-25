@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useQuery } from "@tanstack/react-query";
-import { Chat, type Book, type CommunityChat, type Community } from "@shared/schema";
+import { type Chat, type Book, type CommunityChat, type Community } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, BookOpen } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,7 +14,7 @@ type ChatRoom = {
   userId: number;
   username: string;
   lastMessage?: string;
-  bookId?: number;
+  bookId?: number | undefined;
   bookTitle?: string;
 };
 
@@ -60,7 +60,7 @@ export default function ChatPage() {
             userId: otherUserId,
             username: `User #${otherUserId}`,
             lastMessage: chat.message,
-            bookId: chat.bookId, 
+            bookId: chat.bookId ?? undefined, 
             bookTitle: book?.title
           });
         } else {
