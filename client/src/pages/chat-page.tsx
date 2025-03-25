@@ -22,7 +22,7 @@ export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { send, connectionStatus } = useWebSocket();
-  const [activeChat, setActiveChat] = useState<number | null>(null);
+  const [activeChat, setActiveChat] = useState<number | undefined>(undefined);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [messages, setMessages] = useState<Chat[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -60,7 +60,7 @@ export default function ChatPage() {
             userId: otherUserId,
             username: `User #${otherUserId}`,
             lastMessage: chat.message,
-            bookId: chat.bookId,
+            bookId: chat.bookId, 
             bookTitle: book?.title
           });
         } else {
