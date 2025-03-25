@@ -30,7 +30,9 @@ export default function MyLibrary() {
       description: "",
       condition: "good",
       genre: "Fiction",
-      imageUrl: ""
+      imageUrl: "",
+      ownerId: user?.id || 0,
+      communityId: user?.communityId || 0
     },
     mode: "onChange"
   });
@@ -220,7 +222,7 @@ export default function MyLibrary() {
                         <FormItem>
                           <FormLabel>Description</FormLabel>
                           <FormControl>
-                            <Textarea {...field} />
+                            <Textarea {...field} value={field.value || ''} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -233,7 +235,7 @@ export default function MyLibrary() {
                         <FormItem>
                           <FormLabel>Condition</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="e.g. like new, good, fair" />
+                            <Input {...field} value={field.value || ''} placeholder="e.g. like new, good, fair" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
