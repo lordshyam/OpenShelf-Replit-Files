@@ -84,6 +84,7 @@ export const communities = pgTable("communities", {
   name: text("name").notNull(),
   description: text("description"),
   location: text("location").notNull(),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   createdBy: integer("created_by").notNull(),
 });

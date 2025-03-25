@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCommunitySchema, type Community } from "@shared/schema";
-import { Search, PlusCircle, Users, Building, ArrowRight } from "lucide-react";
+import { Search, PlusCircle, Users, Building, ArrowRight, Upload, Camera, X } from "lucide-react";
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -19,6 +19,7 @@ export default function CommunitySelection() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(insertCommunitySchema),
@@ -26,9 +27,46 @@ export default function CommunitySelection() {
       name: "",
       description: "",
       location: "",
+      imageUrl: "",
       createdBy: user?.id,
     },
   });
+  
+  const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Please choose an image under 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Only accept image files
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an image file (JPEG, PNG, etc.)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    form.setValue("imageUrl", await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    }));
+  };
 
   const { data: communities, isLoading } = useQuery<Community[]>({
     queryKey: ["/api/communities"],
@@ -132,7 +170,16 @@ export default function CommunitySelection() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {communities?.map((community) => (
-                <Card key={community.id} className="hover:shadow-lg transition-shadow">
+                <Card key={community.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+                  {community.imageUrl && (
+                    <div className="w-full h-48">
+                      <img 
+                        src={community.imageUrl} 
+                        alt={community.name} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Building className="h-5 w-5" />
@@ -212,12 +259,77 @@ export default function CommunitySelection() {
                       </FormItem>
                     )}
                   />
+                  
+                  <div className="space-y-4">
+                    <FormLabel>Community Image</FormLabel>
+                    {imagePreview && (
+                      <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-2 right-2"
+                          onClick={() => {
+                            setImagePreview(null);
+                            form.setValue("imageUrl", "");
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageCapture}
+                          className="hidden"
+                          id="image-upload"
+                        />
+                        <label htmlFor="image-upload">
+                          <Button type="button" variant="outline" className="w-full" asChild>
+                            <span>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload Image
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+                      {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleImageCapture}
+                            className="hidden"
+                            id="camera-capture"
+                          />
+                          <label htmlFor="camera-capture">
+                            <Button type="button" variant="outline" className="w-full" asChild>
+                              <span>
+                                <Camera className="mr-2 h-4 w-4" />
+                                Take Photo
+                              </span>
+                            </Button>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   <div className="flex gap-4">
                     <Button
                       type="button"
                       variant="outline"
                       className="flex-1"
-                      onClick={() => setShowCreateForm(false)}
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setImagePreview(null);
+                        form.reset();
+                      }}
                     >
                       Cancel
                     </Button>
