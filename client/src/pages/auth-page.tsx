@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema, verifyEmailSchema, type InsertUser } from "@shared/schema";
+import { insertUserSchema, type InsertUser } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -29,10 +29,9 @@ const loginSchema = z.object({
 });
 
 export default function AuthPage() {
-  const { user, loginMutation } = useAuth();
+  const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [pendingVerification, setPendingVerification] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -59,49 +58,6 @@ export default function AuthPage() {
     defaultValues: { username: "", email: "", password: "" },
   });
 
-  const verificationForm = useForm({
-    resolver: zodResolver(verifyEmailSchema),
-    defaultValues: {
-      email: "",
-      code: ""
-    },
-  });
-
-  useEffect(() => {
-    if (pendingVerification) {
-      verificationForm.reset({ email: pendingVerification, code: "" });
-    }
-  }, [pendingVerification, verificationForm]);
-
-  const handleVerification = async (data: { code: string }) => {
-    if (!pendingVerification) return;
-
-    try {
-      const res = await apiRequest("POST", "/api/verify-email", {
-        email: pendingVerification,
-        code: data.code,
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Verification failed");
-      }
-
-      const result = await res.json();
-      toast({
-        title: "Success!",
-        description: result.message,
-      });
-      setPendingVerification(null); 
-    } catch (error: any) {
-      toast({
-        title: "Verification failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
       <div className="flex items-center justify-center">
@@ -110,44 +66,11 @@ export default function AuthPage() {
             <CardTitle>OpenShelf</CardTitle>
           </CardHeader>
           <CardContent>
-            {pendingVerification ? (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Verify your email</h2>
-                <p className="text-sm text-muted-foreground">
-                  We've sent a verification code to {pendingVerification}.
-                  Please check your email and enter the code below.
-                </p>
-                <Form {...verificationForm}>
-                  <form onSubmit={verificationForm.handleSubmit(handleVerification)} className="space-y-4">
-                    <FormField
-                      control={verificationForm.control}
-                      name="code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Verification Code</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter 6-digit code" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={verificationForm.formState.isSubmitting}
-                    >
-                      {verificationForm.formState.isSubmitting ? "Verifying..." : "Verify Email"}
-                    </Button>
-                  </form>
-                </Form>
-              </div>
-            ) : (
-              <Tabs defaultValue="login">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="register">Register</TabsTrigger>
-                </TabsList>
+            <Tabs defaultValue="login">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
 
                 <TabsContent value="login">
                   <Form {...loginForm}>
@@ -217,27 +140,22 @@ export default function AuthPage() {
 
                 <TabsContent value="register">
                   <Form {...registerForm}>
-                    <form onSubmit={registerForm.handleSubmit(async (data) => {
-                      try {
-                        const response = await apiRequest("POST", "/api/register", data);
-                        const result = await response.json();
-
-                        if (response.ok) {
-                          setPendingVerification(data.email);
+                    <form onSubmit={registerForm.handleSubmit((data) => {
+                      registerMutation.mutate(data, {
+                        onSuccess: () => {
                           toast({
                             title: "Registration successful",
-                            description: "Verification code sent! Please check both your inbox and spam folder.",
+                            description: "Your account has been created!",
                           });
-                        } else {
-                          throw new Error(result.message || "Registration failed");
+                        },
+                        onError: (error) => {
+                          toast({
+                            title: "Registration failed",
+                            description: error.message,
+                            variant: "destructive",
+                          });
                         }
-                      } catch (error: any) {
-                        toast({
-                          title: "Registration failed",
-                          description: error.message,
-                          variant: "destructive",
-                        });
-                      }
+                      });
                     })} className="space-y-4">
                       <FormField
                         control={registerForm.control}
@@ -300,7 +218,6 @@ export default function AuthPage() {
                   </Form>
                 </TabsContent>
               </Tabs>
-            )}
           </CardContent>
         </Card>
       </div>
