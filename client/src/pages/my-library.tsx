@@ -50,10 +50,15 @@ export default function MyLibrary() {
       if (!user?.id) {
         throw new Error("Please login to add books");
       }
+      
+      if (!user?.communityId) {
+        throw new Error("Please join a community before adding books");
+      }
 
       const res = await apiRequest("POST", "/api/books", {
         ...bookData,
-        ownerId: user.id
+        ownerId: user.id,
+        communityId: user.communityId
       });
 
       if (!res.ok) {
@@ -113,6 +118,14 @@ export default function MyLibrary() {
       toast({
         title: "Error",
         description: "Please login to add books",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!user?.communityId) {
+      toast({
+        title: "Error",
+        description: "Please join a community before adding books",
         variant: "destructive",
       });
       return;
