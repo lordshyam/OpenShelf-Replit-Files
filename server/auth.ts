@@ -192,8 +192,15 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+    
+    // Get fresh user data to ensure we have the latest community info
+    const user = await storage.getUser(req.user!.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    return res.json(user);
   });
 }

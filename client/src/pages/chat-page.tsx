@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useQuery } from "@tanstack/react-query";
-import { Chat, type Book, type CommunityChat } from "@shared/schema";
+import { Chat, type Book, type CommunityChat, type Community } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, BookOpen } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +41,11 @@ export default function ChatPage() {
   const { data: communityChats, isLoading: loadingCommunityChats } = useQuery<CommunityChat[]>({
     queryKey: ["/api/community-chats", user?.communityId],
     enabled: !!user?.communityId,
+  });
+  
+  // Get community data
+  const { data: communities } = useQuery<Community[]>({
+    queryKey: ["/api/communities"],
   });
 
   useEffect(() => {
@@ -108,12 +113,16 @@ export default function ChatPage() {
 
   const sendCommunityMessage = () => {
     if (!communityMessage.trim() || !user?.communityId) return;
-
+    
+    // Find the community name
+    const userCommunity = communities?.find(c => c.id === user.communityId);
+    
     send({
       type: 'COMMUNITY_MESSAGE',
       communityId: user.communityId,
       userId: user.id,
-      message: communityMessage
+      message: communityMessage,
+      communityName: userCommunity?.name || 'Community'
     });
 
     setCommunityMessage("");

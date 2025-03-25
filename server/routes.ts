@@ -10,21 +10,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
-  // User endpoint to get current authenticated user
-  app.get("/api/user", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    
-    // Get fresh user data to ensure we have the latest community info
-    const user = await storage.getUser(req.user!.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    return res.json(user);
-  });
 
   // WebSocket connection handling
   wss.on('connection', (ws) => {
@@ -41,14 +26,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString());
 
         if (message.type === 'COMMUNITY_MESSAGE') {
+          // Create and save the community chat message
           const chat = await storage.createCommunityChat({
             communityId: message.communityId,
             userId: message.userId,
             message: message.message
           });
-
-          // Save the message first
-          await storage.createCommunityChat(chat);
 
           // Broadcast to all clients except the sender
           wss.clients.forEach((client) => {
