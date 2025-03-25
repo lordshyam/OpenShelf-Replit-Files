@@ -111,6 +111,8 @@ export const insertBookSchema = createInsertSchema(books).omit({
   borrowerId: true,
   borrowDeadline: true,
   donated: true,
+}).extend({
+  communityId: z.number().optional(),
 });
 
 export const insertBorrowRequestSchema = createInsertSchema(borrowRequests).omit({
