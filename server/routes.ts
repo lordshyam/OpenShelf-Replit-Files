@@ -9,10 +9,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    // Allow all origins without verification for now
+    verifyClient: () => {
+      return true;
+    }
+  });
 
   // WebSocket connection handling
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection established');
 
     // Send initial connection confirmation

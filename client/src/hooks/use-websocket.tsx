@@ -24,6 +24,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         setConnectionStatus('connecting');
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${window.location.host}/ws`;
+        // Include credentials with the WebSocket connection
         wsRef.current = new WebSocket(wsUrl);
 
         wsRef.current.onopen = () => {

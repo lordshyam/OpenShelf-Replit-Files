@@ -16,14 +16,14 @@ import { BookOpen, Eye, EyeOff } from "lucide-react";
 import { z } from 'zod';
 
 interface LoginFormData {
-  username: string;
+  email: string;
   password: string;
   rememberMe: boolean;
 }
 
 // Create a schema for login validation
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Please enter a valid email").min(1, "Email is required"),
   password: z.string().min(1, "Password is required"),
   rememberMe: z.boolean().default(false)
 });
@@ -47,7 +47,7 @@ export default function AuthPage() {
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { 
-      username: "", 
+      email: "", 
       password: "",
       rememberMe: false 
     },
@@ -77,12 +77,12 @@ export default function AuthPage() {
                     <form onSubmit={loginForm.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-4">
                       <FormField
                         control={loginForm.control}
-                        name="username"
+                        name="email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Username or Email</FormLabel>
+                            <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="Enter your username or email" />
+                              <Input {...field} type="email" placeholder="Enter your email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
