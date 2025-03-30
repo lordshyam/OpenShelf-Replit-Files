@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
 
-// For development environment, we'll use a mock email service
-// In production, this would be replaced with actual email credentials
-const isDevelopment = process.env.NODE_ENV !== 'production';
+// Use real emails if we have the app password configured, otherwise use mock email service in development
+const useRealEmails = !!process.env.GMAIL_APP_PASSWORD;
+// In development without password we'll log emails instead of sending them
+const isDevelopment = !useRealEmails && process.env.NODE_ENV !== 'production';
 
 // Create a development or production transporter
 let transporter: nodemailer.Transporter;
@@ -33,16 +34,16 @@ if (isDevelopment) {
     secure: false,
     auth: {
       user: 'sashwath1925@gmail.com', // Use the specified email
-      pass: process.env.EMAIL_PASSWORD,
+      pass: process.env.GMAIL_APP_PASSWORD,
     },
   });
 }
 
 export async function sendVerificationEmail(email: string, code: string) {
   // In development mode, we don't need to check for email credentials
-  if (!isDevelopment && !process.env.EMAIL_PASSWORD) {
-    console.error('Missing email password');
-    throw new Error('Email password is not configured');
+  if (!isDevelopment && !process.env.GMAIL_APP_PASSWORD) {
+    console.error('Missing Gmail app password');
+    throw new Error('Gmail app password is not configured');
   }
 
   const mailOptions = {

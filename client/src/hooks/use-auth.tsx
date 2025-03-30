@@ -57,8 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (response: any) => {
+      // Only set the user data if they don't need verification
+      if (!response.needsVerification) {
+        queryClient.setQueryData(["/api/user"], response);
+      }
+      // The verification UI will be handled in the auth-page component
     },
     onError: (error: Error) => {
       toast({
