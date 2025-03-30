@@ -33,29 +33,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString());
 
         if (message.type === 'COMMUNITY_MESSAGE') {
-          // Create and save the community chat message
-          const chat = await storage.createCommunityChat({
+          // Log the incoming message for debugging
+          console.log('Received community message:', {
             communityId: message.communityId,
             userId: message.userId,
-            message: message.message
+            messageContent: message.message && message.message.length > 50 
+              ? message.message.substring(0, 50) + '...' 
+              : message.message
           });
-
-          // Broadcast to all clients except the sender
-          wss.clients.forEach((client) => {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify({
-                type: 'COMMUNITY_CHAT',
-                chat,
-                communityName: message.communityName
-              }));
+          
+          try {
+            // Validate that the user belongs to the community
+            const user = await storage.getUser(message.userId);
+            if (!user) {
+              throw new Error('User not found');
             }
-          });
+            
+            if (user.communityId !== message.communityId) {
+              throw new Error('User does not belong to this community');
+            }
+            
+            // Create and save the community chat message
+            const chat = await storage.createCommunityChat({
+              communityId: message.communityId,
+              userId: message.userId,
+              message: message.message
+            });
+            
+            console.log('Community chat message saved:', chat.id);
 
-          // Send confirmation back to sender
-          ws.send(JSON.stringify({
-            type: 'COMMUNITY_CHAT_CONFIRMED',
-            chat
-          }));
+            // Send confirmation to the sender first
+            ws.send(JSON.stringify({
+              type: 'COMMUNITY_CHAT_CONFIRMED',
+              chat
+            }));
+            
+            // Broadcast the message to all clients
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'COMMUNITY_CHAT',
+                  chat,
+                  communityName: message.communityName
+                }));
+              }
+            });
+          } catch (error) {
+            console.error('Error processing community message:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to process community message';
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              message: errorMessage
+            }));
+          }
         } else {
           const chat = await storage.createChat(message);
 
@@ -78,9 +108,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (err) {
         console.error('Error processing message:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to process message';
         ws.send(JSON.stringify({
           type: 'ERROR',
-          message: 'Failed to process message'
+          message: errorMessage
         }));
       }
     });
@@ -405,20 +436,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Legacy account verification endpoint is already implemented in auth.ts
 
   // Development/Admin endpoint to reset all data
-  app.post("/api/reset-data", (req, res) => {
-    // Reset all data in storage
-    storage.resetAllData();
-    
-    // Destroy all sessions
-    if (req.session) {
-      req.session.destroy((err) => {
-        if (err) {
-          console.error("Error destroying session:", err);
-        }
-      });
+  app.post("/api/reset-data", async (req, res) => {
+    try {
+      // Reset all data in storage
+      storage.resetAllData();
+      
+      // If using a database, also truncate the users table
+      try {
+        const db = require("../db");
+        await db.pool.query("TRUNCATE TABLE users;");
+        await db.pool.query("TRUNCATE TABLE session;");
+        
+        // Reset borrow information in books
+        await db.pool.query("UPDATE books SET borrowed = false, borrower_id = NULL, borrow_deadline = NULL;");
+        
+        // Truncate borrow requests
+        await db.pool.query("TRUNCATE TABLE \"borrowRequests\";");
+        
+        // Truncate community join requests
+        await db.pool.query("TRUNCATE TABLE community_join_requests;");
+        
+        console.log("Database tables reset successfully");
+      } catch (dbError) {
+        console.log("Using in-memory storage only, no database tables to reset");
+      }
+      
+      // Destroy all sessions
+      if (req.session) {
+        req.session.destroy((err) => {
+          if (err) {
+            console.error("Error destroying session:", err);
+          }
+        });
+      }
+      
+      res.status(200).json({ success: true, message: "All data has been reset" });
+    } catch (error) {
+      console.error("Error resetting data:", error);
+      res.status(500).json({ success: false, message: "Error resetting data" });
     }
-    
-    res.status(200).json({ success: true, message: "All data has been reset" });
   });
 
   return httpServer;

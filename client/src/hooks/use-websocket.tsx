@@ -65,20 +65,46 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               break;
 
             case 'COMMUNITY_CHAT':
+              console.log('Received community chat message:', data);
               const communityChat = data.chat as CommunityChat;
-              queryClient.setQueryData(["/api/community-chats", communityChat.communityId], 
-                (oldChats: CommunityChat[] | undefined) => {
-                  if (!oldChats) return [communityChat];
-                  return [...oldChats, communityChat];
-                }
-              );
+              
+              // Only process if we have user data
+              if (user) {
+                // Only update the UI if the user belongs to this community
+                if (user.communityId === communityChat.communityId) {
+                  queryClient.setQueryData(["/api/community-chats", communityChat.communityId], 
+                    (oldChats: CommunityChat[] | undefined) => {
+                      if (!oldChats) return [communityChat];
+                      
+                      // Don't add duplicate messages (can happen if server broadcasts to all)
+                      const isDuplicate = oldChats.some(
+                        c => c.id === communityChat.id || 
+                            (c.userId === communityChat.userId && 
+                             c.message === communityChat.message && 
+                             Math.abs(new Date(c.timestamp).getTime() - new Date(communityChat.timestamp).getTime()) < 1000)
+                      );
+                      
+                      if (isDuplicate) return oldChats;
+                      return [...oldChats, communityChat];
+                    }
+                  );
 
-              if (communityChat.userId !== user?.id) {
-                toast({
-                  title: `New message in ${data.communityName}`,
-                  description: communityChat.message,
-                });
+                  // Show toast notification for messages from others
+                  if (communityChat.userId !== user.id) {
+                    toast({
+                      title: `New message in ${data.communityName}`,
+                      description: communityChat.message.length > 50 
+                        ? communityChat.message.substring(0, 50) + '...' 
+                        : communityChat.message,
+                    });
+                  }
+                }
               }
+              break;
+            
+            case 'COMMUNITY_CHAT_CONFIRMED':
+              console.log('Community chat message confirmed:', data.chat.id);
+              // No need to do anything here since server already broadcasts to everyone
               break;
 
             case 'CONNECTION_STATUS':

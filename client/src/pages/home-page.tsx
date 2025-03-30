@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { BookImage } from "@/components/book-image";
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,9 +148,10 @@ export default function HomePage() {
             ))
           ) : books?.map(book => (
             <Card key={book.id} className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow">
-              {book.imageUrl && (
-                <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
-              )}
+              <BookImage 
+                imageUrl={book.imageUrl} 
+                title={book.title} 
+              />
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookIcon className="h-5 w-5 text-primary" />

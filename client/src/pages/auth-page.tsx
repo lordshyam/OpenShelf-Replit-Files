@@ -77,6 +77,7 @@ export default function AuthPage() {
   const registerForm = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
     defaultValues: { username: "", email: "", password: "" },
+    mode: "onChange", // Validate on change for better UX feedback
   });
 
   const verificationForm = useForm<VerificationFormData>({
@@ -452,6 +453,26 @@ export default function AuthPage() {
                             toast({
                               title: "Registration successful",
                               description: "Your account has been created!",
+                            });
+                          }
+                        },
+                        onError: (error: any) => {
+                          // Display error message
+                          toast({
+                            title: "Registration failed",
+                            description: error?.message || "An error occurred during registration.",
+                            variant: "destructive",
+                          });
+                          
+                          if (error?.message === "Username already exists") {
+                            registerForm.setError("username", { 
+                              type: "manual", 
+                              message: "This username is already taken. Please try another one."
+                            });
+                          } else if (error?.message === "Email already registered") {
+                            registerForm.setError("email", {
+                              type: "manual",
+                              message: "This email is already registered. Try logging in instead."
                             });
                           }
                         }

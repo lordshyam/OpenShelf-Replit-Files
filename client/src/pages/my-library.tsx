@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Plus, BookOpen, Clock, Loader2, Library, Upload, Camera, Check, X, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { BookImage } from "@/components/book-image";
 
 export default function MyLibrary() {
   const { user } = useAuth();
@@ -299,20 +300,22 @@ export default function MyLibrary() {
                     <div className="space-y-4">
                       <label className="block text-sm font-medium">Book Image</label>
                       {imagePreview && (
-                        <div className="relative w-full h-48 rounded-lg overflow-hidden">
-                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="absolute top-2 right-2"
-                            onClick={() => {
-                              setImagePreview(null);
-                              form.setValue("imageUrl", "");
-                            }}
-                          >
-                            Remove
-                          </Button>
+                        <div className="relative w-full rounded-lg overflow-hidden">
+                          <div className="relative h-48">
+                            <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-2 right-2"
+                              onClick={() => {
+                                setImagePreview(null);
+                                form.setValue("imageUrl", "");
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4">
@@ -388,9 +391,11 @@ export default function MyLibrary() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {myBooks?.map(book => (
                 <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  {book.imageUrl && (
-                    <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
-                  )}
+                  <BookImage 
+                    imageUrl={book.imageUrl} 
+                    title={book.title} 
+                    height="h-48"
+                  />
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <BookOpen className="h-5 w-5 text-primary" />
@@ -421,9 +426,11 @@ export default function MyLibrary() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {borrowedBooks?.map(book => (
                 <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  {book.imageUrl && (
-                    <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
-                  )}
+                  <BookImage 
+                    imageUrl={book.imageUrl} 
+                    title={book.title} 
+                    height="h-48"
+                  />
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <BookOpen className="h-5 w-5 text-primary" />
@@ -467,11 +474,13 @@ export default function MyLibrary() {
                 return (
                   <Card key={request.id} className="overflow-hidden">
                     <div className="flex flex-col md:flex-row">
-                      {book.imageUrl && (
-                        <div className="w-full md:w-1/4">
-                          <img src={book.imageUrl} alt={book.title} className="w-full h-48 md:h-full object-cover" />
-                        </div>
-                      )}
+                      <div className="w-full md:w-1/4">
+                        <BookImage 
+                          imageUrl={book.imageUrl} 
+                          title={book.title} 
+                          height="h-48 md:h-full"
+                        />
+                      </div>
                       <div className="flex-1 p-4">
                         <h3 className="text-lg font-bold flex items-center">
                           <BookOpen className="h-5 w-5 text-primary mr-2" />
