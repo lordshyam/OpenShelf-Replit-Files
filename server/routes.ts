@@ -402,6 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendStatus(200);
   });
 
+  // Legacy account verification endpoint is already implemented in auth.ts
 
   return httpServer;
 }

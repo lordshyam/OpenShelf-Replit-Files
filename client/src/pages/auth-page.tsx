@@ -40,12 +40,19 @@ interface ResendVerificationFormData {
   email: string;
 }
 
+// Legacy account verification form data
+interface LegacyVerificationFormData {
+  email: string;
+  password: string;
+}
+
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
+  const [showLegacyVerification, setShowLegacyVerification] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   useEffect(() => {
@@ -83,6 +90,13 @@ export default function AuthPage() {
   const resendForm = useForm<ResendVerificationFormData>({
     defaultValues: {
       email: ""
+    }
+  });
+  
+  const legacyVerificationForm = useForm<LegacyVerificationFormData>({
+    defaultValues: {
+      email: "",
+      password: ""
     }
   });
 
@@ -139,6 +153,31 @@ export default function AuthPage() {
     }
   });
   
+  const legacyVerificationMutation = useMutation({
+    mutationFn: async (data: LegacyVerificationFormData) => {
+      const response = await apiRequest(
+        'POST',
+        '/api/mark-verified',
+        data
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Account verified successfully",
+        description: "You are now logged in.",
+      });
+      setShowLegacyVerification(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Verification failed",
+        description: error.message || "Please check your credentials and try again.",
+        variant: "destructive",
+      });
+    }
+  });
+  
   // Handle login errors
   useEffect(() => {
     if (loginMutation.isError) {
@@ -148,6 +187,10 @@ export default function AuthPage() {
         setRegisteredEmail(error?.email || "");
         verificationForm.setValue("email", error?.email || "");
         resendForm.setValue("email", error?.email || "");
+        legacyVerificationForm.setValue("email", error?.email || "");
+        
+        // If this is an account created before verification was implemented
+        // Show the legacy verification form option
         setShowVerification(true);
         toast({
           title: "Email verification required",
@@ -161,69 +204,155 @@ export default function AuthPage() {
         });
       }
     }
-  }, [loginMutation.isError, loginMutation.error, toast, verificationForm, resendForm]);
+  }, [loginMutation.isError, loginMutation.error, toast, verificationForm, resendForm, legacyVerificationForm]);
 
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
       <div className="flex items-center justify-center">
         {showVerification ? (
           <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Verify Your Email</CardTitle>
-              <CardDescription>
-                Please enter the verification code sent to {registeredEmail}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...verificationForm}>
-                <form onSubmit={verificationForm.handleSubmit((data) => verifyEmailMutation.mutate(data))} className="space-y-4">
-                  <FormField
-                    control={verificationForm.control}
-                    name="code"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Verification Code</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Enter 6-digit code" maxLength={6} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            {showLegacyVerification ? (
+              <>
+                <CardHeader>
+                  <CardTitle>Verify Existing Account</CardTitle>
+                  <CardDescription>
+                    Enter your credentials to verify your existing account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...legacyVerificationForm}>
+                    <form onSubmit={legacyVerificationForm.handleSubmit((data) => legacyVerificationMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={legacyVerificationForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="email" placeholder="Enter your email" readOnly />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={legacyVerificationForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  {...field}
+                                  placeholder="Enter your password"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                  onMouseDown={() => setShowPassword(true)}
+                                  onMouseUp={() => setShowPassword(false)}
+                                  onMouseLeave={() => setShowPassword(false)}
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        disabled={legacyVerificationMutation.isPending}
+                      >
+                        {legacyVerificationMutation.isPending ? "Verifying..." : "Verify Account"}
+                      </Button>
+                    </form>
+                  </Form>
+                  
                   <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={verifyEmailMutation.isPending}
+                    variant="link" 
+                    className="mt-4 p-0 h-auto w-full text-center" 
+                    onClick={() => setShowLegacyVerification(false)}
                   >
-                    {verifyEmailMutation.isPending ? "Verifying..." : "Verify Email"}
+                    Use Verification Code Instead
                   </Button>
-                </form>
-              </Form>
+                </CardContent>
+              </>
+            ) : (
+              <>
+                <CardHeader>
+                  <CardTitle>Verify Your Email</CardTitle>
+                  <CardDescription>
+                    Please enter the verification code sent to {registeredEmail}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...verificationForm}>
+                    <form onSubmit={verificationForm.handleSubmit((data) => verifyEmailMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={verificationForm.control}
+                        name="code"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Verification Code</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter 6-digit code" maxLength={6} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        disabled={verifyEmailMutation.isPending}
+                      >
+                        {verifyEmailMutation.isPending ? "Verifying..." : "Verify Email"}
+                      </Button>
+                    </form>
+                  </Form>
 
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">Didn't receive a code?</p>
-                <Form {...resendForm}>
-                  <form onSubmit={resendForm.handleSubmit((data) => resendVerificationMutation.mutate(data))} className="space-y-4">
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      className="w-full"
-                      disabled={resendVerificationMutation.isPending}
+                  <div className="mt-6">
+                    <p className="text-sm text-muted-foreground mb-2">Didn't receive a code?</p>
+                    <Form {...resendForm}>
+                      <form onSubmit={resendForm.handleSubmit((data) => resendVerificationMutation.mutate(data))} className="space-y-4">
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          className="w-full"
+                          disabled={resendVerificationMutation.isPending}
+                        >
+                          {resendVerificationMutation.isPending ? "Sending..." : "Resend Verification Code"}
+                        </Button>
+                      </form>
+                    </Form>
+                  </div>
+
+                  <div className="mt-4 border-t pt-4">
+                    <p className="text-sm text-muted-foreground mb-2">Have an existing account created before verification?</p>
+                    <Button 
+                      variant="secondary" 
+                      className="w-full" 
+                      onClick={() => setShowLegacyVerification(true)}
                     >
-                      {resendVerificationMutation.isPending ? "Sending..." : "Resend Verification Code"}
+                      Verify Existing Account
                     </Button>
-                  </form>
-                </Form>
-              </div>
+                  </div>
 
-              <Button 
-                variant="link" 
-                className="mt-4 p-0 h-auto w-full text-center" 
-                onClick={() => setShowVerification(false)}
-              >
-                Back to Login
-              </Button>
-            </CardContent>
+                  <Button 
+                    variant="link" 
+                    className="mt-4 p-0 h-auto w-full text-center" 
+                    onClick={() => setShowVerification(false)}
+                  >
+                    Back to Login
+                  </Button>
+                </CardContent>
+              </>
+            )}
           </Card>
         ) : (
           <Card className="w-full max-w-md">

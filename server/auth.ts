@@ -297,4 +297,48 @@ export function setupAuth(app: Express) {
       next(err);
     }
   });
+
+  // Special endpoint to mark existing accounts as verified
+  app.post("/api/mark-verified", async (req, res, next) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Verify password
+      if (!(await comparePasswords(password, user.password))) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Mark user as verified
+      await storage.updateUser(user.id, { 
+        verified: true,
+        verificationCode: null
+      });
+
+      // Log in the user
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Error logging in after verification" });
+        }
+        
+        // Return the verified user
+        return res.status(200).json({
+          ...user,
+          verified: true,
+          message: "Account verified successfully"
+        });
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
 }
