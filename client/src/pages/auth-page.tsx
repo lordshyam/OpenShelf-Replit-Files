@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema, type InsertUser } from "@shared/schema";
+import { insertUserSchema, verifyEmailSchema, type InsertUser } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Eye, EyeOff } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Mail } from "lucide-react";
 import { z } from 'zod';
 
 interface LoginFormData {
@@ -33,6 +33,8 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -57,20 +59,140 @@ export default function AuthPage() {
     resolver: zodResolver(insertUserSchema),
     defaultValues: { username: "", email: "", password: "" },
   });
+  
+  const verificationForm = useForm<z.infer<typeof verifyEmailSchema>>({
+    resolver: zodResolver(verifyEmailSchema),
+    defaultValues: { email: verificationEmail, code: "" },
+  });
+  
+  // Update verification form email when verificationEmail state changes
+  useEffect(() => {
+    if (verificationEmail) {
+      verificationForm.setValue("email", verificationEmail);
+    }
+  }, [verificationEmail, verificationForm]);
+
+  const handleVerifyEmail = async (data: z.infer<typeof verifyEmailSchema>) => {
+    try {
+      const response = await fetch('/api/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Email verified successfully",
+          description: "Your account is now active. You are being logged in.",
+        });
+        setShowVerification(false);
+        // The server automatically logs the user in after verification
+        window.location.reload(); // Refresh to update auth state
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Verification failed",
+          description: error.message || "Please check your verification code and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Verification error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Handle responses from login and register
+  useEffect(() => {
+    const handleLoginError = (error: any) => {
+      if (error?.message?.includes('not verified') || error?.needsVerification) {
+        setVerificationEmail(error.email || loginForm.getValues().email);
+        setShowVerification(true);
+        toast({
+          title: "Email verification required",
+          description: "Please verify your email to activate your account."
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: error?.message || "Invalid credentials",
+          variant: "destructive",
+        });
+      }
+    };
+
+    if (loginMutation.isError) {
+      handleLoginError(loginMutation.error);
+    }
+  }, [loginMutation.isError, loginMutation.error]);
 
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
       <div className="flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>OpenShelf</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="login">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
+        {showVerification ? (
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Verify Your Email
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <p>A verification code has been sent to <strong>{verificationEmail}</strong>.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Please enter the 6-digit code to verify your email address.
+                </p>
+              </div>
+              
+              <Form {...verificationForm}>
+                <form onSubmit={verificationForm.handleSubmit(handleVerifyEmail)} className="space-y-4">
+                  <FormField
+                    control={verificationForm.control}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Verification Code</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter 6-digit code" maxLength={6} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex flex-col gap-2">
+                    <Button type="submit" className="w-full">
+                      Verify Email
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => setShowVerification(false)}
+                    >
+                      Back to Login
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>OpenShelf</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="login">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="login">Login</TabsTrigger>
+                  <TabsTrigger value="register">Register</TabsTrigger>
+                </TabsList>
 
                 <TabsContent value="login">
                   <Form {...loginForm}>
@@ -142,11 +264,20 @@ export default function AuthPage() {
                   <Form {...registerForm}>
                     <form onSubmit={registerForm.handleSubmit((data) => {
                       registerMutation.mutate(data, {
-                        onSuccess: () => {
-                          toast({
-                            title: "Registration successful",
-                            description: "Your account has been created!",
-                          });
+                        onSuccess: (response: any) => {
+                          if (response.email) {
+                            setVerificationEmail(response.email);
+                            setShowVerification(true);
+                            toast({
+                              title: "Registration successful",
+                              description: "Please check your email for verification code.",
+                            });
+                          } else {
+                            toast({
+                              title: "Registration successful",
+                              description: "Your account has been created!",
+                            });
+                          }
                         },
                         onError: (error) => {
                           toast({
@@ -218,8 +349,9 @@ export default function AuthPage() {
                   </Form>
                 </TabsContent>
               </Tabs>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="hidden md:flex flex-col justify-center items-center bg-primary text-primary-foreground p-8 rounded-lg">

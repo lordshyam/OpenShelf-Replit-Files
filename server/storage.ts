@@ -14,6 +14,7 @@ export interface IStorage {
   updateUser(id: number, updates: Partial<User>): Promise<void>;
   updateUserCredits(userId: number, credits: number): Promise<void>;
   updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void>;
+  deleteUser(id: number): Promise<void>;
 
   // Book operations
   getBooks(): Promise<Book[]>;
@@ -88,6 +89,8 @@ export class MemStorage implements IStorage {
     const community: Community = {
       ...insertCommunity,
       id,
+      description: insertCommunity.description || null,
+      imageUrl: insertCommunity.imageUrl || null,
       createdAt: new Date(),
     };
     this.communities.set(id, community);
@@ -171,9 +174,10 @@ export class MemStorage implements IStorage {
       id, 
       credits: 0, 
       preferences: null,
-      verified: false,
-      verificationCode: insertUser.verificationCode,
-      avatar: getRandomAvatar()
+      verified: insertUser.verified || false,
+      verificationCode: insertUser.verificationCode || null,
+      avatar: getRandomAvatar(),
+      communityId: null
     };
     this.users.set(id, user);
     return user;
@@ -200,6 +204,10 @@ export class MemStorage implements IStorage {
     this.users.set(userId, user);
   }
 
+  async deleteUser(id: number): Promise<void> {
+    this.users.delete(id);
+  }
+
   async getBooks(): Promise<Book[]> {
     return Array.from(this.books.values());
   }
@@ -221,6 +229,11 @@ export class MemStorage implements IStorage {
     const book: Book = {
       ...insertBook,
       id,
+      communityId: insertBook.communityId || 0, // Default to 0 if not provided
+      description: insertBook.description || null,
+      googleBooksId: insertBook.googleBooksId || null,
+      imageUrl: insertBook.imageUrl || null,
+      condition: insertBook.condition || null,
       borrowed: false,
       borrowerId: null,
       borrowDeadline: null,
@@ -281,6 +294,7 @@ export class MemStorage implements IStorage {
     const chat: Chat = {
       ...insertChat,
       id,
+      bookId: insertChat.bookId || null,
       timestamp: new Date(),
     };
     this.chats.set(id, chat);

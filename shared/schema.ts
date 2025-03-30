@@ -25,6 +25,8 @@ export const insertUserSchema = createInsertSchema(users)
     username: true,
     email: true,
     password: true,
+    verified: true,
+    verificationCode: true,
   })
   .extend({
     username: z.string()
@@ -37,6 +39,8 @@ export const insertUserSchema = createInsertSchema(users)
       .min(6, "Password must be at least 6 characters long")
       .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
+    verified: z.boolean().optional().default(false),
+    verificationCode: z.string().nullable().optional(),
   });
 
 // Schema for verifying email
