@@ -32,7 +32,7 @@ if (isDevelopment) {
     port: 587,
     secure: false,
     auth: {
-      user: process.env.EMAIL_USER,
+      user: 'sashwath1925@gmail.com', // Use the specified email
       pass: process.env.EMAIL_PASSWORD,
     },
   });
@@ -40,15 +40,15 @@ if (isDevelopment) {
 
 export async function sendVerificationEmail(email: string, code: string) {
   // In development mode, we don't need to check for email credentials
-  if (!isDevelopment && (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD)) {
-    console.error('Missing email credentials');
-    throw new Error('Email credentials are not configured');
+  if (!isDevelopment && !process.env.EMAIL_PASSWORD) {
+    console.error('Missing email password');
+    throw new Error('Email password is not configured');
   }
 
   const mailOptions = {
     from: {
       name: "OpenShelf Support",
-      address: isDevelopment ? "dev@openshelf.app" : process.env.EMAIL_USER
+      address: isDevelopment ? "dev@openshelf.app" : 'sashwath1925@gmail.com'
     },
     to: email,
     subject: 'Welcome to OpenShelf - Verify Your Email',

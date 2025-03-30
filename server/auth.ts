@@ -8,6 +8,13 @@ import { storage } from "./storage";
 import { insertUserSchema, verifyEmailSchema, User as SelectUser } from "@shared/schema";
 import { sendVerificationEmail, generateVerificationCode } from "./email";
 
+// Extended info type for verification
+interface VerificationInfo {
+  message: string;
+  email?: string;
+  needsVerification?: boolean;
+}
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -67,11 +74,12 @@ export function setupAuth(app: Express) {
 
         // Check if user is verified
         if (!user.verified) {
-          return done(null, false, { 
+          const info: VerificationInfo = {
             message: "Email not verified. Please verify your email to log in.",
             email: user.email,
             needsVerification: true
-          });
+          };
+          return done(null, false, info as any);
         }
 
         return done(null, user);
@@ -143,20 +151,37 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      // Create the user with verified = true
+      // Generate a verification code
+      const verificationCode = generateVerificationCode();
+      
+      // Create the user with verified = false and the verification code
       const user = await storage.createUser({
         ...result.data,
         password: await hashPassword(result.data.password),
-        verified: true
+        verified: false,
+        verificationCode
       });
 
-      // Log in the user immediately after registration
-      req.login(user, (err) => {
-        if (err) {
-          return res.status(500).json({ message: "Error logging in after registration" });
-        }
-        res.status(201).json(user);
-      });
+      try {
+        // Send verification email
+        await sendVerificationEmail(email, verificationCode);
+        
+        // Return success response with unverified status
+        return res.status(201).json({ 
+          ...user, 
+          needsVerification: true,
+          message: "Registration successful. Please check your email for the verification code."
+        });
+      } catch (emailError) {
+        console.error("Error sending verification email:", emailError);
+        
+        // We still created the user, but couldn't send email
+        return res.status(201).json({ 
+          ...user, 
+          needsVerification: true,
+          message: "Registration successful, but we couldn't send a verification email. Please contact support."
+        });
+      }
     } catch (err) {
       next(err);
     }
@@ -179,5 +204,97 @@ export function setupAuth(app: Express) {
     }
     
     return res.json(user);
+  });
+
+  // Email verification endpoint
+  app.post("/api/verify-email", async (req, res, next) => {
+    try {
+      const result = verifyEmailSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json(result.error);
+      }
+
+      const { email, code } = result.data;
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if user is already verified
+      if (user.verified) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Check if verification code matches
+      if (user.verificationCode !== code) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      // Update user to verified status
+      await storage.updateUser(user.id, { 
+        verified: true,
+        verificationCode: null // Clear the verification code
+      });
+
+      // Log in the user after verification
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Error logging in after verification" });
+        }
+        
+        // Return the verified user
+        return res.status(200).json({
+          ...user,
+          verified: true,
+          message: "Email verified successfully"
+        });
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+  
+  // Resend verification code endpoint
+  app.post("/api/resend-verification", async (req, res, next) => {
+    try {
+      const email = req.body.email;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if user is already verified
+      if (user.verified) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Generate a new verification code
+      const verificationCode = generateVerificationCode();
+
+      // Update user with new verification code
+      await storage.updateUser(user.id, { verificationCode });
+
+      try {
+        // Send verification email
+        await sendVerificationEmail(email, verificationCode);
+        return res.status(200).json({ 
+          message: "Verification code resent successfully. Please check your email." 
+        });
+      } catch (emailError) {
+        console.error("Error sending verification email:", emailError);
+        return res.status(500).json({ 
+          message: "Could not send verification email. Please try again later." 
+        });
+      }
+    } catch (err) {
+      next(err);
+    }
   });
 }
