@@ -26,8 +26,8 @@ export default function AdminPage() {
       await apiRequest('POST', '/api/reset-data');
       
       toast({
-        title: "Data reset successful",
-        description: "All application data has been reset to defaults.",
+        title: "Account reset successful",
+        description: "All user accounts have been removed while preserving content data.",
       });
       
       setResetComplete(true);
@@ -53,10 +53,10 @@ export default function AdminPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Success!</AlertTitle>
           <AlertDescription>
-            All application data has been reset. You will need to log in again.
+            All user account information has been reset while preserving content data. New users will need to register accounts.
             <div className="mt-2">
               <a href="/auth" className="text-primary hover:underline">
-                Go to login page
+                Go to registration page
               </a>
             </div>
           </AlertDescription>
@@ -65,9 +65,9 @@ export default function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Management</CardTitle>
+          <CardTitle>Account Management</CardTitle>
           <CardDescription>
-            Reset the application to its initial state. This will remove all users, books, chats, and other data.
+            Reset user accounts only. This will remove all user credentials (usernames, passwords, email addresses) while preserving all books, chats, and other content data.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -76,8 +76,8 @@ export default function AdminPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Warning!</AlertTitle>
               <AlertDescription>
-                This will delete all application data. This action cannot be undone.
-                Are you sure you want to continue?
+                This will delete all user accounts and credentials, but preserve book listings and other content. 
+                This action cannot be undone. Are you sure you want to continue?
               </AlertDescription>
             </Alert>
           ) : null}
@@ -113,7 +113,7 @@ export default function AdminPage() {
               disabled={resetComplete}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Reset All Data
+              Reset User Accounts
             </Button>
           )}
         </CardFooter>
