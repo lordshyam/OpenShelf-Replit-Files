@@ -46,22 +46,29 @@ export interface IStorage {
   updateBorrowRequest(id: number, status: string): Promise<void>;
   getChats(userId: number): Promise<Chat[]>;
   createChat(chat: InsertChat): Promise<Chat>;
+  
+  // Data management
+  resetAllData(): void;
 
-  sessionStore: session.SessionStore;
+  sessionStore: ReturnType<typeof createMemoryStore>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private books: Map<number, Book>;
-  private chats: Map<number, Chat>;
-  private borrowRequests: Map<number, BorrowRequest>;
-  private communities: Map<number, Community>;
-  private communityJoinRequests: Map<number, CommunityJoinRequest>;
-  private communityChats: Map<number, CommunityChat>;
-  private currentId: number;
-  sessionStore: session.SessionStore;
+  private users!: Map<number, User>;
+  private books!: Map<number, Book>;
+  private chats!: Map<number, Chat>;
+  private borrowRequests!: Map<number, BorrowRequest>;
+  private communities!: Map<number, Community>;
+  private communityJoinRequests!: Map<number, CommunityJoinRequest>;
+  private communityChats!: Map<number, CommunityChat>;
+  private currentId!: number;
+  sessionStore!: ReturnType<typeof createMemoryStore>;
 
   constructor() {
+    this.resetAllData();
+  }
+  
+  resetAllData(): void {
     this.users = new Map();
     this.books = new Map();
     this.chats = new Map();

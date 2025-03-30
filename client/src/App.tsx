@@ -11,6 +11,7 @@ import HomePage from "@/pages/home-page";
 import MyLibrary from "@/pages/my-library";
 import ChatPage from "@/pages/chat-page";
 import CommunitySelection from "@/pages/community-selection";
+import AdminPage from "@/pages/admin-page";
 import Navbar from "@/components/ui/navbar";
 
 function Router() {
@@ -20,6 +21,7 @@ function Router() {
       <Switch>
         <Route path="/auth" component={AuthPage} />
         <Route path="/select-community" component={CommunitySelection} />
+        <Route path="/admin" component={AdminPage} />
         <ProtectedRoute path="/" component={HomePage} />
         <ProtectedRoute path="/library" component={MyLibrary} />
         <ProtectedRoute path="/chat" component={ChatPage} />

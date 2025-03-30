@@ -525,11 +525,11 @@ export default function MyLibrary() {
                 );
               })}
 
-              {borrowRequests?.filter(req => req.status !== "pending").length > 0 && (
+              {borrowRequests && borrowRequests.filter(req => req.status !== "pending").length > 0 && (
                 <div className="mt-8">
                   <h3 className="text-lg font-semibold mb-4">Past Request History</h3>
                   <div className="space-y-4">
-                    {borrowRequests?.filter(req => req.status !== "pending").map(request => {
+                    {borrowRequests.filter(req => req.status !== "pending").map(request => {
                       const book = myBooks?.find(b => b.id === request.bookId);
                       if (!book) return null;
                       

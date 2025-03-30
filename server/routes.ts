@@ -404,5 +404,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Legacy account verification endpoint is already implemented in auth.ts
 
+  // Development/Admin endpoint to reset all data
+  app.post("/api/reset-data", (req, res) => {
+    // Reset all data in storage
+    storage.resetAllData();
+    
+    // Destroy all sessions
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Error destroying session:", err);
+        }
+      });
+    }
+    
+    res.status(200).json({ success: true, message: "All data has been reset" });
+  });
+
   return httpServer;
 }
