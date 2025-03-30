@@ -70,13 +70,38 @@ export class MemStorage implements IStorage {
   }
   
   resetAllData(): void {
-    // Reset only user accounts, preserving books, chats, and other data
+    // Completely reset all user accounts while preserving content data
     this.users = new Map();
     
-    // Reset the session store
+    // Clear all borrow requests since they're tied to users
+    this.borrowRequests = new Map();
+    
+    // Clear all community join requests since they're tied to users
+    this.communityJoinRequests = new Map();
+    
+    // Update books to remove borrower information
+    if (this.books) {
+      const books = Array.from(this.books.values());
+      for (const book of books) {
+        // Keep the book but remove borrower information
+        this.books.set(book.id, {
+          ...book,
+          borrowed: false,
+          borrowerId: null,
+          borrowDeadline: null
+        });
+      }
+    }
+    
+    // Reset session store
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
+    
+    // Reset currentId to ensure no clashes with existing IDs
+    if (!this.currentId) {
+      this.currentId = 1;
+    }
   }
   
   // Full reset for development purposes - not used in production
