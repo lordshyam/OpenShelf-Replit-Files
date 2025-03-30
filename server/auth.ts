@@ -75,7 +75,7 @@ export function setupAuth(app: Express) {
         // Check if user is verified
         if (!user.verified) {
           const info: VerificationInfo = {
-            message: "Email not verified. Please verify your email to log in.",
+            message: "Email not verified. Please verify your email first.",
             email: user.email,
             needsVerification: true
           };

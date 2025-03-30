@@ -190,12 +190,13 @@ export default function AuthPage() {
         resendForm.setValue("email", error?.email || "");
         legacyVerificationForm.setValue("email", error?.email || "");
         
-        // If this is an account created before verification was implemented
-        // Show the legacy verification form option
+        // Show the verification form
         setShowVerification(true);
+        setShowLegacyVerification(false);
+        
         toast({
           title: "Email verification required",
-          description: "Please verify your email to log in.",
+          description: "Please verify your email to log in. Check your inbox for a verification code.",
         });
       } else {
         toast({
@@ -293,7 +294,14 @@ export default function AuthPage() {
                 </CardHeader>
                 <CardContent>
                   <Form {...verificationForm}>
-                    <form onSubmit={verificationForm.handleSubmit((data) => verifyEmailMutation.mutate(data))} className="space-y-4">
+                    <form onSubmit={verificationForm.handleSubmit((data) => {
+                      // Ensure email is included in the verification form data
+                      const verificationData = {
+                        email: registeredEmail,
+                        code: data.code
+                      };
+                      verifyEmailMutation.mutate(verificationData);
+                    })} className="space-y-4">
                       <FormField
                         control={verificationForm.control}
                         name="code"
@@ -320,7 +328,11 @@ export default function AuthPage() {
                   <div className="mt-6">
                     <p className="text-sm text-muted-foreground mb-2">Didn't receive a code?</p>
                     <Form {...resendForm}>
-                      <form onSubmit={resendForm.handleSubmit((data) => resendVerificationMutation.mutate(data))} className="space-y-4">
+                      <form onSubmit={resendForm.handleSubmit(() => {
+                        // Make sure we're using the correct email for resending
+                        const resendData = { email: registeredEmail };
+                        resendVerificationMutation.mutate(resendData);
+                      })} className="space-y-4">
                         <Button
                           type="submit"
                           variant="outline"
