@@ -143,67 +143,24 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      // Generate a verification code
-      const verificationCode = generateVerificationCode();
-
-      // Create the user with verification code and verified = false
+      // Create the user with verified = true
       const user = await storage.createUser({
         ...result.data,
         password: await hashPassword(result.data.password),
-        verificationCode,
-        verified: false
+        verified: true
       });
 
-      try {
-        // Send verification email
-        await sendVerificationEmail(email, verificationCode);
-        res.status(201).json({ 
-          message: "Registration successful. Please check your email for verification code.",
-          email
-        });
-      } catch (emailError) {
-        console.error("Error sending verification email:", emailError);
-        // Delete the user if email sending fails
-        await storage.deleteUser(user.id);
-        return res.status(500).json({ message: "Failed to send verification email. Please try again." });
-      }
+      // Log in the user immediately after registration
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Error logging in after registration" });
+        }
+        res.status(201).json(user);
+      });
     } catch (err) {
       next(err);
     }
   });
-
-  app.post("/api/verify-email", async (req, res) => {
-    const result = verifyEmailSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json(result.error);
-    }
-
-    const { email, code } = result.data;
-    const user = await storage.getUserByEmail(email);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (user.verified) {
-      return res.status(400).json({ message: "Email already verified" });
-    }
-
-    if (user.verificationCode !== code) {
-      return res.status(400).json({ message: "Invalid verification code" });
-    }
-
-    await storage.updateUser(user.id, { verified: true, verificationCode: null });
-
-    // Automatically log in the user after verification
-    req.login(user, (err) => {
-      if (err) {
-        return res.status(500).json({ message: "Error logging in after verification" });
-      }
-      res.json({ message: "Email verified successfully" });
-    });
-  });
-
 
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
