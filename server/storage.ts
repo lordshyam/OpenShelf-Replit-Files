@@ -70,7 +70,9 @@ export class MemStorage implements IStorage {
   }
   
   resetAllData(): void {
-    // Completely reset all user accounts while preserving content data
+    console.log("Performing complete memory storage reset for user data...");
+    
+    // Completely reset all user accounts
     this.users = new Map();
     
     // Clear all borrow requests since they're tied to users
@@ -97,7 +99,8 @@ export class MemStorage implements IStorage {
     }
     
     // Update books to remove borrower information
-    if (this.books) {
+    if (this.books && this.books.size > 0) {
+      console.log(`Resetting borrow status for ${this.books.size} books...`);
       const books = Array.from(this.books.values());
       for (const book of books) {
         // Keep the book but remove borrower information
@@ -110,6 +113,11 @@ export class MemStorage implements IStorage {
       }
     }
     
+    // Reset all community memberships
+    if (this.communities && this.communities.size > 0) {
+      console.log(`Preserving ${this.communities.size} communities...`);
+    }
+    
     // Reset session store
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
@@ -119,6 +127,8 @@ export class MemStorage implements IStorage {
     if (!this.currentId) {
       this.currentId = 1;
     }
+    
+    console.log("Memory storage reset complete.");
   }
   
   // Full reset for development purposes - not used in production

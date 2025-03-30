@@ -438,28 +438,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Development/Admin endpoint to reset all data
   app.post("/api/reset-data", async (req, res) => {
     try {
-      // Reset all data in storage
-      storage.resetAllData();
-      
-      // If using a database, also truncate the users table
+      // First handle database reset if a database is being used
       try {
         const db = require("../db");
-        await db.pool.query("TRUNCATE TABLE users;");
-        await db.pool.query("TRUNCATE TABLE session;");
+        console.log("Resetting database tables...");
+        
+        // Truncate all user-related tables
+        await db.pool.query("TRUNCATE TABLE users CASCADE;");
+        await db.pool.query("TRUNCATE TABLE session CASCADE;");
         
         // Reset borrow information in books
         await db.pool.query("UPDATE books SET borrowed = false, borrower_id = NULL, borrow_deadline = NULL;");
         
         // Truncate borrow requests
-        await db.pool.query("TRUNCATE TABLE \"borrowRequests\";");
+        await db.pool.query("TRUNCATE TABLE \"borrowRequests\" CASCADE;");
         
         // Truncate community join requests
-        await db.pool.query("TRUNCATE TABLE community_join_requests;");
+        await db.pool.query("TRUNCATE TABLE community_join_requests CASCADE;");
+        
+        // Community membership reset
+        await db.pool.query("UPDATE users SET community_id = NULL;");
         
         console.log("Database tables reset successfully");
       } catch (dbError) {
-        console.log("Using in-memory storage only, no database tables to reset");
+        console.error("Database reset error or using in-memory storage only:", dbError);
       }
+      
+      // Now reset the in-memory storage
+      console.log("Resetting in-memory storage...");
+      storage.resetAllData();
       
       // Destroy all sessions
       if (req.session) {
