@@ -53,7 +53,7 @@ export default function HomePage() {
   });
 
   const borrowBookMutation = useMutation({
-    mutationFn: async (bookId: string) => {
+    mutationFn: async (bookId: string | number) => {
       const res = await apiRequest("POST", `/api/books/${bookId}/borrow`);
       return res.json();
     },
@@ -128,10 +128,14 @@ export default function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {isLoading ? (
             Array(6).fill(0).map((_, i) => (
-              <Card key={i} className="flex flex-col">
+              <Card key={i} className="flex flex-col overflow-hidden">
+                <Skeleton className="h-48 w-full" />
                 <CardHeader>
                   <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-1/4" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Skeleton className="h-24 w-full" />
@@ -142,13 +146,21 @@ export default function HomePage() {
               </Card>
             ))
           ) : books?.map(book => (
-            <Card key={book.id} className="flex flex-col">
+            <Card key={book.id} className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow">
+              {book.imageUrl && (
+                <img src={book.imageUrl} alt={book.title} className="w-full h-48 object-cover" />
+              )}
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookIcon className="h-5 w-5 text-primary" />
                   <span>{book.title}</span>
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">{book.author}</p>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">{book.author}</p>
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                    {book.genre}
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="flex-grow">
                 <ScrollArea className="h-24">
@@ -164,9 +176,10 @@ export default function HomePage() {
               <CardFooter>
                 <Button
                   className="w-full"
-                  disabled={user?.credits < 1 || book.ownerId === user?.id}
+                  disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id}
                   onClick={() => {
-                    if (user?.credits < 1) {
+                    const userCredits = user?.credits ?? 0;
+                    if (userCredits < 1) {
                       toast({
                         title: "Insufficient credits",
                         description: "You need 1 credit to borrow a book. List your books to earn credits!",
@@ -184,7 +197,7 @@ export default function HomePage() {
                       return;
                     }
 
-                    borrowBookMutation.mutate(book.id);
+                    borrowBookMutation.mutate(book.id.toString());
                   }}
                 >
                   {book.ownerId === user?.id ? "Your Book" : "Borrow Book"}
