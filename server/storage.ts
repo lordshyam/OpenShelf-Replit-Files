@@ -49,6 +49,7 @@ export interface IStorage {
   
   // Data management
   resetAllData(): void;
+  resetEverything(): void;
 
   sessionStore: ReturnType<typeof createMemoryStore>;
 }
@@ -69,6 +70,17 @@ export class MemStorage implements IStorage {
   }
   
   resetAllData(): void {
+    // Reset only user accounts, preserving books, chats, and other data
+    this.users = new Map();
+    
+    // Reset the session store
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+  }
+  
+  // Full reset for development purposes - not used in production
+  resetEverything(): void {
     this.users = new Map();
     this.books = new Map();
     this.chats = new Map();
