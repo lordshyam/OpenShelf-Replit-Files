@@ -79,6 +79,23 @@ export class MemStorage implements IStorage {
     // Clear all community join requests since they're tied to users
     this.communityJoinRequests = new Map();
     
+    // Initialize maps if they don't exist
+    if (!this.books) {
+      this.books = new Map();
+    }
+    
+    if (!this.chats) {
+      this.chats = new Map();
+    }
+    
+    if (!this.communities) {
+      this.communities = new Map();
+    }
+    
+    if (!this.communityChats) {
+      this.communityChats = new Map();
+    }
+    
     // Update books to remove borrower information
     if (this.books) {
       const books = Array.from(this.books.values());
