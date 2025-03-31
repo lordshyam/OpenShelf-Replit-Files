@@ -17,10 +17,10 @@ import { Badge } from "@/components/ui/badge";
 
 export default function CommunitySelection() {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(location.includes("?create=true"));
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const form = useForm({
@@ -107,13 +107,22 @@ export default function CommunitySelection() {
       const res = await apiRequest("POST", `/api/communities/${communityId}/join`);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       setLocation("/");
-      toast({
-        title: "Success",
-        description: "Joined community successfully",
-      });
+      
+      // Check if this was a join request or direct join
+      if (data.pendingApproval) {
+        toast({
+          title: "Request Submitted",
+          description: "Your request to join the community has been sent to the admin",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Joined community successfully",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({

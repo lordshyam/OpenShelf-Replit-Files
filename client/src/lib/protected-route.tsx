@@ -30,7 +30,12 @@ export function ProtectedRoute({
   }
 
   // Only redirect to community selection during the initial login flow
-  if (!user.communityId && path !== "/select-community" && path !== "/" && !sessionStorage.getItem('skipCommunity')) {
+  // Allow access to the chat page without requiring a community
+  if (!user.communityId && 
+      path !== "/select-community" && 
+      path !== "/" && 
+      path !== "/chat" && 
+      !sessionStorage.getItem('skipCommunity')) {
     return (
       <Route path={path}>
         <Redirect to="/select-community" />

@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { type Chat, type Book, type CommunityChat, type Community } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, BookOpen } from "lucide-react";
+import { Send, Loader2, BookOpen, Users, PlusCircle, LogOut, Globe, Lock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link, useLocation } from "wouter";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 type ChatRoom = {
   userId: number;
@@ -27,6 +31,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Chat[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [communityMessage, setCommunityMessage] = useState("");
+  const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const communityScrollRef = useRef<HTMLDivElement>(null);
 
@@ -231,43 +236,210 @@ export default function ChatPage() {
               </TabsContent>
 
               <TabsContent value="community" className="h-full">
-                <div className="flex flex-col h-full">
-                  <div ref={communityScrollRef} className="flex-1 overflow-y-auto pr-4">
-                    <div className="space-y-4">
-                      {communityChats?.map((msg, i) => (
-                        <div
-                          key={i}
-                          className={`flex ${msg.userId === user!.id ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                              msg.userId === user!.id
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted"
-                            }`}
-                          >
-                            <p className="text-sm">{msg.message}</p>
-                            <span className="text-xs opacity-70">
-                              {new Date(msg.timestamp).toLocaleTimeString()}
-                            </span>
+                {user?.communityId ? (
+                  <div className="flex flex-col h-full">
+                    <div className="mb-4">
+                      {communities?.find(c => c.id === user.communityId) && (
+                        <div className="flex justify-between items-center bg-accent/50 p-3 rounded-lg mb-2">
+                          <div>
+                            <h3 className="font-medium">
+                              {communities.find(c => c.id === user.communityId)?.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {communities.find(c => c.id === user.communityId)?.location}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to leave this community?")) {
+                                  apiRequest("POST", `/api/communities/${user.communityId}/leave`)
+                                    .then(() => {
+                                      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+                                      toast({
+                                        title: "Success",
+                                        description: "You have left the community",
+                                      });
+                                    })
+                                    .catch(error => {
+                                      toast({
+                                        title: "Error",
+                                        description: error.message,
+                                        variant: "destructive",
+                                      });
+                                    });
+                                }
+                              }}
+                            >
+                              <LogOut className="h-4 w-4 mr-1" />
+                              Leave Community
+                            </Button>
                           </div>
                         </div>
-                      ))}
+                      )}
+                    </div>
+                    
+                    <div ref={communityScrollRef} className="flex-1 overflow-y-auto pr-4">
+                      <div className="space-y-4">
+                        {communityChats?.map((msg, i) => {
+                          // Find the user for this message
+                          const messageUser = communities?.find(c => c.id === user.communityId)?.createdBy === msg.userId
+                            ? { username: "Admin", avatar: null }
+                            : { username: `User ${msg.userId}`, avatar: null };
+                            
+                          return (
+                            <div
+                              key={i}
+                              className={`flex ${msg.userId === user!.id ? "justify-end" : "justify-start"}`}
+                            >
+                              {msg.userId !== user!.id && (
+                                <Avatar className="mr-2">
+                                  {messageUser.avatar ? (
+                                    <AvatarImage src={messageUser.avatar} />
+                                  ) : (
+                                    <AvatarFallback className="bg-primary text-primary-foreground">
+                                      {messageUser.username.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  )}
+                                </Avatar>
+                              )}
+                              <div
+                                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                                  msg.userId === user!.id
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted"
+                                }`}
+                              >
+                                {msg.userId !== user!.id && (
+                                  <p className="text-xs font-medium mb-1">{messageUser.username}</p>
+                                )}
+                                <p className="text-sm">{msg.message}</p>
+                                <span className="text-xs opacity-70">
+                                  {new Date(msg.timestamp).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              {msg.userId === user!.id && (
+                                <Avatar className="ml-2">
+                                  {user.avatar ? (
+                                    <AvatarImage src={user.avatar} />
+                                  ) : (
+                                    <AvatarFallback className="bg-primary text-primary-foreground">
+                                      {user.username.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  )}
+                                </Avatar>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 mt-4">
+                      <Input
+                        value={communityMessage}
+                        onChange={(e) => setCommunityMessage(e.target.value)}
+                        placeholder="Type your message to the community..."
+                        onKeyPress={(e) => e.key === "Enter" && sendCommunityMessage()}
+                      />
+                      <Button onClick={sendCommunityMessage} disabled={!communityMessage.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="flex items-center space-x-2 mt-4">
-                    <Input
-                      value={communityMessage}
-                      onChange={(e) => setCommunityMessage(e.target.value)}
-                      placeholder="Type your message to the community..."
-                      onKeyPress={(e) => e.key === "Enter" && sendCommunityMessage()}
-                    />
-                    <Button onClick={sendCommunityMessage} disabled={!communityMessage.trim()}>
-                      <Send className="h-4 w-4" />
-                    </Button>
+                ) : (
+                  <div className="p-4">
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <CardTitle>Join a Community</CardTitle>
+                        <CardDescription>
+                          Join a community to chat with other members and share books.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Button onClick={() => setLocation("/select-community")}>
+                            <Users className="mr-2 h-4 w-4" />
+                            Browse Communities
+                          </Button>
+                          <Button variant="outline" onClick={() => setLocation("/select-community?create=true")}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Create Community
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {communities && communities.length > 0 && (
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Featured Communities</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {communities.slice(0, 4).map(community => (
+                            <Card key={community.id} className="overflow-hidden">
+                              <CardHeader className="pb-2">
+                                <div className="flex justify-between items-start">
+                                  <CardTitle className="text-base">{community.name}</CardTitle>
+                                  <Badge variant={community.isPublic ? "default" : "outline"} className="flex items-center gap-1">
+                                    {community.isPublic ? (
+                                      <>
+                                        <Globe className="w-3 h-3" />
+                                        Public
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Lock className="w-3 h-3" />
+                                        Private
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+                                <CardDescription className="text-xs">{community.location}</CardDescription>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                <p className="text-sm mb-3 line-clamp-2">{community.description}</p>
+                                <Button 
+                                  size="sm" 
+                                  className="w-full"
+                                  onClick={() => {
+                                    apiRequest("POST", `/api/communities/${community.id}/join`)
+                                      .then(res => res.json())
+                                      .then(data => {
+                                        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+                                        
+                                        if (data.pendingApproval) {
+                                          toast({
+                                            title: "Request Submitted",
+                                            description: "Your request to join the community has been sent to the admin",
+                                          });
+                                        } else {
+                                          toast({
+                                            title: "Success",
+                                            description: "Joined community successfully",
+                                          });
+                                        }
+                                      })
+                                      .catch(error => {
+                                        toast({
+                                          title: "Error joining community",
+                                          description: error.message,
+                                          variant: "destructive",
+                                        });
+                                      });
+                                  }}
+                                >
+                                  <Users className="mr-2 h-3 w-3" />
+                                  Join
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
               </TabsContent>
             </div>
           </Tabs>
