@@ -117,6 +117,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Get all users (for chat and message display)
+  app.get("/api/users", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const users = await storage.getUsers();
+    res.json(users);
+  });
+  
   // Community routes
   app.get("/api/communities", async (req, res) => {
     const communities = await storage.getCommunities();

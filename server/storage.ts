@@ -7,6 +7,7 @@ const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
   // User operations
+  getUsers(): Promise<User[]>;
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -228,6 +229,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.books.values()).filter(
       (book) => book.communityId === communityId
     );
+  }
+  
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 
   async getUser(id: number): Promise<User | undefined> {
