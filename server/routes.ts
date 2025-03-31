@@ -595,6 +595,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
+    
+    // Get community info
+    const community = await storage.getCommunity(user.communityId!);
+    
+    if (community) {
+      // Create a notification message in the community chat
+      const bookInfoMessage = `${user.username} has listed a new book: "${book.title}" by ${book.author}. ${book.description ? `Description: ${book.description}` : ''} ${book.condition ? `Condition: ${book.condition}` : ''}`;
+      
+      const communityChat = await storage.createCommunityChat({
+        communityId: user.communityId!,
+        userId: 0, // System message (OpenShelf)
+        message: bookInfoMessage
+      });
+      
+      // Broadcast the community message about the new book
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'COMMUNITY_CHAT',
+            chat: communityChat,
+            communityName: community.name,
+            book: book // Include the full book data
+          }));
+        }
+      });
+    }
 
     res.status(201).json(book);
   });
@@ -662,7 +688,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!book) return res.status(404).send("Book not found");
     if (book.ownerId !== req.user!.id) return res.status(403).send("Not your book");
 
-    // Update the request status
+    // Get all pending requests for this book
+    const allRequests = (await storage.getBorrowRequests(req.user!.id))
+      .filter(r => r.bookId === book.id && r.status === "pending");
+    
+    // Update the accepted request status
     await storage.updateBorrowRequest(requestId, "accepted");
 
     // Update the book status
@@ -689,7 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    // Create a private chat room and notify both users
+    // Create a private chat room and notify the accepted user
     const chat = await storage.createChat({
       senderId: req.user!.id,
       receiverId: request.requesterId,
@@ -706,6 +736,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
+    
+    // Handle other pending requests for this book (auto-decline)
+    for (const otherRequest of allRequests) {
+      // Skip the accepted request
+      if (otherRequest.id === requestId) continue;
+      
+      // Update the request status
+      await storage.updateBorrowRequest(otherRequest.id, "declined");
+      
+      // Send a message from OpenShelf (system) to the requester
+      const systemMessage = await storage.createChat({
+        senderId: 0, // Using 0 as system/OpenShelf ID
+        receiverId: otherRequest.requesterId,
+        message: `Your request to borrow "${book.title}" was automatically declined because the book was borrowed by someone else.`,
+        bookId: book.id,
+      });
+      
+      // Broadcast the system notification
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'CHAT_MESSAGE',
+            chat: systemMessage,
+            bookTitle: book.title,
+            systemMessage: true
+          }));
+        }
+      });
+    }
 
     res.sendStatus(200);
   });
@@ -729,11 +788,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Update the request status
     await storage.updateBorrowRequest(requestId, "declined");
 
-    // Notify the borrower through chat
-    const chat = await storage.createChat({
-      senderId: req.user!.id,
+    // Notify the borrower through chat - using OpenShelf system message
+    const systemMessage = await storage.createChat({
+      senderId: 0, // Using 0 as system/OpenShelf ID
       receiverId: request.requesterId,
-      message: `Your request to borrow "${book.title}" has been declined.`,
+      message: `Your request to borrow "${book.title}" was declined by the owner.`,
       bookId: book.id,
     });
 
@@ -741,8 +800,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
           type: 'CHAT_MESSAGE',
-          chat,
-          bookTitle: book.title
+          chat: systemMessage,
+          bookTitle: book.title,
+          systemMessage: true
         }));
       }
     });

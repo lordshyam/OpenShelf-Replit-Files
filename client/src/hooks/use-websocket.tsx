@@ -56,7 +56,15 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 return [...oldChats, chat];
               });
 
-              if (chat.senderId !== user?.id) {
+              // Special handling for system messages from OpenShelf
+              if (data.systemMessage && chat.senderId === 0) {
+                toast({
+                  title: "OpenShelf Notification",
+                  description: data.bookTitle ? `About book "${data.bookTitle}": ${chat.message}` : chat.message,
+                });
+              } 
+              // Regular user messages
+              else if (chat.senderId !== user?.id) {
                 toast({
                   title: "New Message",
                   description: data.bookTitle ? `Regarding book: ${data.bookTitle}` : chat.message,

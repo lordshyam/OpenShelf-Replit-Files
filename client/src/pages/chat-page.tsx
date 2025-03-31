@@ -20,6 +20,7 @@ type ChatRoom = {
   lastMessage?: string;
   bookId?: number | undefined;
   bookTitle?: string;
+  isSystem?: boolean; // Flag for OpenShelf system messages
 };
 
 export default function ChatPage() {
@@ -67,7 +68,24 @@ export default function ChatPage() {
   useEffect(() => {
     if (chats && books && allUsers) {
       const rooms = new Map<number, ChatRoom>();
+      
+      // Special handling for OpenShelf system messages (senderId = 0)
+      const systemMessages = chats.filter(chat => chat.senderId === 0);
+      if (systemMessages.length > 0) {
+        // Create a special room for OpenShelf system messages
+        rooms.set(0, {
+          userId: 0,
+          username: "OpenShelf",
+          lastMessage: systemMessages[systemMessages.length - 1]?.message,
+          isSystem: true
+        });
+      }
+      
+      // Process regular user chats
       for (const chat of chats) {
+        // Skip system messages as we've already handled them
+        if (chat.senderId === 0 && chat.receiverId === user?.id) continue;
+        
         const otherUserId = chat.senderId === user?.id ? chat.receiverId : chat.senderId;
         const book = chat.bookId ? books.find(b => b.id === chat.bookId) : undefined;
         const chatUser = allUsers.find(u => u.id === otherUserId);
@@ -180,7 +198,11 @@ export default function ChatPage() {
                       >
                         <div className="flex items-center gap-2">
                           <Avatar className="w-8 h-8">
-                            {allUsers?.find(u => u.id === room.userId)?.avatar ? (
+                            {room.isSystem ? (
+                              <AvatarFallback className="bg-secondary text-secondary-foreground">
+                                OS
+                              </AvatarFallback>
+                            ) : allUsers?.find(u => u.id === room.userId)?.avatar ? (
                               <AvatarImage src={allUsers?.find(u => u.id === room.userId)?.avatar || ""} />
                             ) : (
                               <AvatarFallback className="bg-primary text-primary-foreground">
@@ -188,7 +210,15 @@ export default function ChatPage() {
                               </AvatarFallback>
                             )}
                           </Avatar>
-                          <div className="font-medium">{room.username}</div>
+                          <div className="font-medium">
+                            {room.isSystem ? (
+                              <span className="flex items-center gap-1">
+                                OpenShelf <Badge variant="outline" className="text-xs">System</Badge>
+                              </span>
+                            ) : (
+                              room.username
+                            )}
+                          </div>
                         </div>
                         {room.bookTitle && (
                           <div className="flex items-center text-xs text-primary gap-1 mb-1 ml-10">
@@ -211,9 +241,14 @@ export default function ChatPage() {
                         <div ref={scrollRef} className="flex-1 overflow-y-auto pr-4">
                           <div className="space-y-4">
                             {messages.map((msg, i) => {
+                              // Special handling for OpenShelf system messages
+                              const isSystemMessage = msg.senderId === 0;
+                              
                               // Find the proper user information for this message
                               const messageUserId = msg.senderId === user!.id ? user!.id : msg.senderId;
-                              const messageUser = allUsers?.find(u => u.id === messageUserId);
+                              const messageUser = isSystemMessage 
+                                ? { username: "OpenShelf", avatar: null } 
+                                : allUsers?.find(u => u.id === messageUserId);
                               
                               return (
                                 <div
@@ -222,7 +257,11 @@ export default function ChatPage() {
                                 >
                                   {msg.senderId !== user!.id && (
                                     <Avatar className="mr-2">
-                                      {messageUser?.avatar ? (
+                                      {isSystemMessage ? (
+                                        <AvatarFallback className="bg-secondary text-secondary-foreground">
+                                          OS
+                                        </AvatarFallback>
+                                      ) : messageUser?.avatar ? (
                                         <AvatarImage src={messageUser.avatar} />
                                       ) : (
                                         <AvatarFallback className="bg-primary text-primary-foreground">
@@ -235,11 +274,17 @@ export default function ChatPage() {
                                     className={`max-w-[80%] rounded-lg px-4 py-2 ${
                                       msg.senderId === user!.id
                                         ? "bg-primary text-primary-foreground"
+                                        : isSystemMessage
+                                        ? "bg-secondary text-secondary-foreground"
                                         : "bg-muted"
                                     }`}
                                   >
                                     {msg.senderId !== user!.id && (
-                                      <p className="text-xs font-medium mb-1">{messageUser?.username || `User ${msg.senderId}`}</p>
+                                      <p className="text-xs font-medium mb-1">
+                                        {isSystemMessage 
+                                          ? "OpenShelf System" 
+                                          : messageUser?.username || `User ${msg.senderId}`}
+                                      </p>
                                     )}
                                     <p className="text-sm">{msg.message}</p>
                                     <span className="text-xs opacity-70">
@@ -264,15 +309,23 @@ export default function ChatPage() {
                         </div>
 
                         <div className="flex items-center space-x-2 mt-4">
-                          <Input
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Type your message..."
-                            onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                          />
-                          <Button onClick={sendMessage} disabled={!newMessage.trim()}>
-                            <Send className="h-4 w-4" />
-                          </Button>
+                          {activeChat === 0 ? (
+                            <div className="w-full text-center text-sm text-muted-foreground p-2 border rounded-md">
+                              This is a system notification channel. You cannot reply to these messages.
+                            </div>
+                          ) : (
+                            <>
+                              <Input
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                placeholder="Type your message..."
+                                onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                              />
+                              <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </>
                     ) : (
