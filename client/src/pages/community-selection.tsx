@@ -4,14 +4,16 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCommunitySchema, type Community } from "@shared/schema";
-import { Search, PlusCircle, Users, Building, ArrowRight, Upload, Camera, X } from "lucide-react";
+import { Search, PlusCircle, Users, Building, ArrowRight, Upload, Camera, X, Lock, Globe } from "lucide-react";
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 export default function CommunitySelection() {
   const { user } = useAuth();
@@ -28,6 +30,7 @@ export default function CommunitySelection() {
       description: "",
       location: "",
       imageUrl: "",
+      isPublic: true,
       createdBy: user?.id,
     },
   });
@@ -181,10 +184,25 @@ export default function CommunitySelection() {
                     </div>
                   )}
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Building className="h-5 w-5" />
-                      {community.name}
-                    </CardTitle>
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="flex items-center gap-2">
+                        <Building className="h-5 w-5" />
+                        {community.name}
+                      </CardTitle>
+                      <Badge variant={community.isPublic ? "default" : "outline"} className="flex items-center gap-1">
+                        {community.isPublic ? (
+                          <>
+                            <Globe className="w-3 h-3" />
+                            Public
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3" />
+                            Private
+                          </>
+                        )}
+                      </Badge>
+                    </div>
                     <p className="text-sm text-muted-foreground">{community.location}</p>
                   </CardHeader>
                   <CardContent>
@@ -256,6 +274,41 @@ export default function CommunitySelection() {
                           <Input {...field} placeholder="Describe your community" />
                         </FormControl>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isPublic"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            {field.value ? (
+                              <span className="flex items-center">
+                                <Globe className="w-4 h-4 mr-2" />
+                                Public Community
+                              </span>
+                            ) : (
+                              <span className="flex items-center">
+                                <Lock className="w-4 h-4 mr-2" />
+                                Private Community
+                              </span>
+                            )}
+                          </FormLabel>
+                          <FormDescription>
+                            {field.value 
+                              ? "Anyone can view and join this community" 
+                              : "Join requests need to be approved by you"}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />

@@ -122,6 +122,158 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const communities = await storage.getCommunities();
     res.json(communities);
   });
+  
+  app.get("/api/communities/:id", async (req, res) => {
+    const communityId = parseInt(req.params.id);
+    const community = await storage.getCommunity(communityId);
+    
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    res.json(community);
+  });
+  
+  app.get("/api/communities/:id/members", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.id);
+    const members = await storage.getCommunityMembers(communityId);
+    
+    res.json(members);
+  });
+  
+  app.patch("/api/communities/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.id);
+    const community = await storage.getCommunity(communityId);
+    
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Only the community creator can update the community
+    if (community.createdBy !== req.user!.id) {
+      return res.status(403).json({ message: "Only community admins can update the community" });
+    }
+    
+    // Update community visibility
+    if (req.body.isPublic !== undefined) {
+      community.isPublic = req.body.isPublic;
+      await storage.updateCommunity(communityId, { isPublic: req.body.isPublic });
+    }
+    
+    res.json(community);
+  });
+  
+  app.post("/api/communities/:id/remove-member", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.id);
+    const userId = parseInt(req.body.userId);
+    
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+    
+    const community = await storage.getCommunity(communityId);
+    
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Only the community creator can remove members
+    if (community.createdBy !== req.user!.id) {
+      return res.status(403).json({ message: "Only community admins can remove members" });
+    }
+    
+    // Can't remove community creator
+    if (userId === community.createdBy) {
+      return res.status(400).json({ message: "Cannot remove the community admin" });
+    }
+    
+    // Get the user to make sure they're in this community
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.communityId !== communityId) {
+      return res.status(400).json({ message: "User is not a member of this community" });
+    }
+    
+    // Update user to remove community
+    await storage.updateUser(userId, { communityId: null });
+    
+    // Add message to community chat
+    const leaveChat = await storage.createCommunityChat({
+      communityId,
+      userId: req.user!.id,
+      message: `${user.username} has been removed from the community by admin.`
+    });
+
+    // Broadcast the leave message
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'COMMUNITY_CHAT',
+          chat: leaveChat,
+          communityName: community.name
+        }));
+      }
+    });
+    
+    res.json({ message: "Member removed successfully" });
+  });
+  
+  app.post("/api/communities/:id/leave", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.id);
+    const community = await storage.getCommunity(communityId);
+    
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Check if user is a member of this community
+    if (req.user!.communityId !== communityId) {
+      return res.status(400).json({ message: "You are not a member of this community" });
+    }
+    
+    // If community creator is leaving, we might need special handling
+    if (community.createdBy === req.user!.id) {
+      // For now, we'll just let them leave
+      // In a real app, you might want to transfer ownership or delete the community
+    }
+    
+    // Update user to leave community
+    await storage.updateUser(req.user!.id, { communityId: null });
+    
+    // If this wasn't the creator, add a leave message
+    if (community.createdBy !== req.user!.id) {
+      const leaveChat = await storage.createCommunityChat({
+        communityId,
+        userId: req.user!.id,
+        message: `${req.user!.username} has left the community.`
+      });
+  
+      // Broadcast the leave message
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'COMMUNITY_CHAT',
+            chat: leaveChat,
+            communityName: community.name
+          }));
+        }
+      });
+    }
+    
+    res.json({ message: "Left community successfully" });
+  });
 
   app.post("/api/communities", async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -168,7 +320,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Community not found" });
     }
 
-    // Update user's community
+    // Check if the community is the creator's community or a public community
+    const isCreator = community.createdBy === req.user!.id;
+
+    if (!community.isPublic && !isCreator) {
+      // For private communities, create a join request instead of directly joining
+      const joinRequest = await storage.createJoinRequest({
+        userId: req.user!.id,
+        communityId: community.id
+      });
+
+      // Alert the community creator about the join request
+      const creator = await storage.getUser(community.createdBy);
+      if (creator) {
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              type: 'JOIN_REQUEST',
+              communityId: community.id,
+              communityName: community.name,
+              requesterId: req.user!.id,
+              requesterUsername: req.user!.username
+            }));
+          }
+        });
+      }
+
+      return res.json({ 
+        message: "Join request submitted. Waiting for approval.",
+        pendingApproval: true
+      });
+    }
+
+    // For public communities or the community creator, directly join
     await storage.updateUser(req.user!.id, { communityId });
 
     // Add welcome message to community chat
@@ -190,6 +374,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     return res.json({ message: "Joined community successfully" });
+  });
+
+  // Get community join requests
+  app.get("/api/communities/:id/join-requests", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.id);
+    const community = await storage.getCommunity(communityId);
+    
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Only the community creator can view join requests
+    if (community.createdBy !== req.user!.id) {
+      return res.status(403).json({ message: "Only community admins can view join requests" });
+    }
+    
+    const requests = await storage.getJoinRequests(communityId);
+    res.json(requests);
+  });
+  
+  // Accept a join request
+  app.post("/api/communities/:communityId/join-requests/:requestId/accept", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.communityId);
+    const requestId = parseInt(req.params.requestId);
+    
+    const community = await storage.getCommunity(communityId);
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Only the community creator can accept join requests
+    if (community.createdBy !== req.user!.id) {
+      return res.status(403).json({ message: "Only community admins can accept join requests" });
+    }
+    
+    const requests = await storage.getJoinRequests(communityId);
+    const request = requests.find(r => r.id === requestId);
+    
+    if (!request) {
+      return res.status(404).json({ message: "Join request not found" });
+    }
+    
+    // Update request status
+    await storage.updateJoinRequest(requestId, "accepted");
+    
+    // Update user's community
+    await storage.updateUser(request.userId, { communityId });
+    
+    // Get the user who requested to join
+    const joiningUser = await storage.getUser(request.userId);
+    
+    if (joiningUser) {
+      // Add welcome message to community chat
+      const joinChat = await storage.createCommunityChat({
+        communityId,
+        userId: joiningUser.id,
+        message: `${joiningUser.username} has joined the community!`
+      });
+      
+      // Broadcast the join message
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'COMMUNITY_CHAT',
+            chat: joinChat,
+            communityName: community.name
+          }));
+          
+          // Also notify the user that their request was accepted
+          client.send(JSON.stringify({
+            type: 'JOIN_REQUEST_ACCEPTED',
+            communityId: community.id,
+            communityName: community.name,
+            userId: joiningUser.id
+          }));
+        }
+      });
+    }
+    
+    res.json({ message: "Join request accepted" });
+  });
+  
+  // Decline a join request
+  app.post("/api/communities/:communityId/join-requests/:requestId/decline", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const communityId = parseInt(req.params.communityId);
+    const requestId = parseInt(req.params.requestId);
+    
+    const community = await storage.getCommunity(communityId);
+    if (!community) {
+      return res.status(404).json({ message: "Community not found" });
+    }
+    
+    // Only the community creator can decline join requests
+    if (community.createdBy !== req.user!.id) {
+      return res.status(403).json({ message: "Only community admins can decline join requests" });
+    }
+    
+    const requests = await storage.getJoinRequests(communityId);
+    const request = requests.find(r => r.id === requestId);
+    
+    if (!request) {
+      return res.status(404).json({ message: "Join request not found" });
+    }
+    
+    // Update request status
+    await storage.updateJoinRequest(requestId, "declined");
+    
+    // Notify the user that their request was declined
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'JOIN_REQUEST_DECLINED',
+          communityId: community.id,
+          communityName: community.name,
+          userId: request.userId
+        }));
+      }
+    });
+    
+    res.json({ message: "Join request declined" });
   });
 
   // Get community chats endpoint

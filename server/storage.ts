@@ -29,6 +29,7 @@ export interface IStorage {
   getCommunities(): Promise<Community[]>;
   getCommunity(id: number): Promise<Community | undefined>;
   createCommunity(community: InsertCommunity): Promise<Community>;
+  updateCommunity(id: number, updates: Partial<Community>): Promise<void>;
   getCommunityMembers(communityId: number): Promise<User[]>;
 
   // Community join requests
@@ -166,6 +167,13 @@ export class MemStorage implements IStorage {
     };
     this.communities.set(id, community);
     return community;
+  }
+  
+  async updateCommunity(id: number, updates: Partial<Community>): Promise<void> {
+    const community = this.communities.get(id);
+    if (!community) throw new Error("Community not found");
+    const updatedCommunity = { ...community, ...updates };
+    this.communities.set(id, updatedCommunity);
   }
 
   async getCommunityMembers(communityId: number): Promise<User[]> {

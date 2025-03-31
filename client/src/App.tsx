@@ -11,6 +11,7 @@ import HomePage from "@/pages/home-page";
 import MyLibrary from "@/pages/my-library";
 import ChatPage from "@/pages/chat-page";
 import CommunitySelection from "@/pages/community-selection";
+import CommunityManagement from "@/pages/community-management";
 import AdminPage from "@/pages/admin-page";
 import Navbar from "@/components/ui/navbar";
 
@@ -25,6 +26,7 @@ function Router() {
         <ProtectedRoute path="/" component={HomePage} />
         <ProtectedRoute path="/library" component={MyLibrary} />
         <ProtectedRoute path="/chat" component={ChatPage} />
+        <ProtectedRoute path="/community-management" component={CommunityManagement} />
         <Route component={NotFound} />
       </Switch>
     </div>

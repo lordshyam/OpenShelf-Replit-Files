@@ -2,11 +2,25 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "./button";
 import { Avatar, AvatarImage, AvatarFallback } from "./avatar";
-import { HomeIcon, BookOpen, MessageSquare } from "lucide-react";
+import { HomeIcon, BookOpen, MessageSquare, Settings, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
+  
+  // Check if user is a community admin
+  const { data: community } = useQuery({
+    queryKey: ["/api/communities", user?.communityId],
+    enabled: !!user?.communityId,
+    queryFn: async () => {
+      const res = await fetch(`/api/communities/${user!.communityId}`);
+      if (!res.ok) return null;
+      return res.json();
+    }
+  });
+  
+  const isAdmin = community && user && community.createdBy === user.id;
 
   if (!user) return null;
 
@@ -39,6 +53,15 @@ export default function Navbar() {
                 <span>Chat</span>
               </a>
             </Link>
+            
+            {isAdmin && (
+              <Link href="/community-management">
+                <a className={`flex items-center space-x-2 ${location === "/community-management" ? "text-primary" : "text-muted-foreground"}`}>
+                  <Settings className="h-5 w-5" />
+                  <span>Manage Community</span>
+                </a>
+              </Link>
+            )}
           </div>
         </div>
 

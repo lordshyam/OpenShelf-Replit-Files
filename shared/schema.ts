@@ -89,6 +89,7 @@ export const communities = pgTable("communities", {
   description: text("description"),
   location: text("location").notNull(),
   imageUrl: text("image_url"),
+  isPublic: boolean("is_public").default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   createdBy: integer("created_by").notNull(),
 });
@@ -139,6 +140,8 @@ export const userPreferencesSchema = z.object({
 export const insertCommunitySchema = createInsertSchema(communities).omit({
   id: true,
   createdAt: true,
+}).extend({
+  isPublic: z.boolean().default(true)
 });
 
 export const insertCommunityJoinRequestSchema = createInsertSchema(communityJoinRequests).omit({
