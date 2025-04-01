@@ -131,6 +131,29 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
+  // Check if email exists endpoint for client-side validation
+  app.post("/api/check-email", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      
+      // Find user by email
+      const existingEmail = await storage.getUserByEmail(email);
+      
+      // Return result to client
+      return res.status(200).json({ 
+        exists: !!existingEmail,
+        message: existingEmail ? "Email already registered" : "Email available"
+      });
+    } catch (err) {
+      console.error("Error checking email:", err);
+      return res.status(500).json({ message: "Error checking email availability" });
+    }
+  });
+
   app.post("/api/register", async (req, res, next) => {
     try {
       const result = insertUserSchema.safeParse(req.body);
@@ -264,15 +287,15 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email is required" });
       }
 
-      // Find user by email
+      // First check if the email exists in our system
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: "Email not found. Please register first." });
       }
 
       // Check if user is already verified
       if (user.verified) {
-        return res.status(400).json({ message: "Email is already verified" });
+        return res.status(400).json({ message: "Email is already verified. Please log in." });
       }
 
       // Generate a new verification code

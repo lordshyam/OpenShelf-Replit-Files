@@ -223,7 +223,31 @@ export default function AuthPage() {
                 </CardHeader>
                 <CardContent>
                   <Form {...legacyVerificationForm}>
-                    <form onSubmit={legacyVerificationForm.handleSubmit((data) => legacyVerificationMutation.mutate(data))} className="space-y-4">
+                    <form onSubmit={legacyVerificationForm.handleSubmit((data) => {
+                      // First check if email exists before attempting verification
+                      apiRequest('POST', '/api/check-email', { email: data.email })
+                        .then(res => res.json())
+                        .then(result => {
+                          if (result.exists) {
+                            // Email exists, proceed with legacy verification
+                            legacyVerificationMutation.mutate(data);
+                          } else {
+                            // Email doesn't exist in the system
+                            toast({
+                              title: "Email not found",
+                              description: "This email is not registered. Please register first.",
+                              variant: "destructive",
+                            });
+                          }
+                        })
+                        .catch(error => {
+                          toast({
+                            title: "Error checking email",
+                            description: "Could not verify email status. Please try again.",
+                            variant: "destructive",
+                          });
+                        });
+                    })} className="space-y-4">
                       <FormField
                         control={legacyVerificationForm.control}
                         name="email"
@@ -300,7 +324,30 @@ export default function AuthPage() {
                         email: registeredEmail,
                         code: data.code
                       };
-                      verifyEmailMutation.mutate(verificationData);
+                      
+                      // First check if email exists before attempting verification
+                      apiRequest('POST', '/api/check-email', { email: registeredEmail })
+                        .then(res => res.json())
+                        .then(result => {
+                          if (result.exists) {
+                            // Email exists, proceed with verification
+                            verifyEmailMutation.mutate(verificationData);
+                          } else {
+                            // Email doesn't exist in the system
+                            toast({
+                              title: "Email not found",
+                              description: "This email is not registered. Please register first.",
+                              variant: "destructive",
+                            });
+                          }
+                        })
+                        .catch(error => {
+                          toast({
+                            title: "Error checking email",
+                            description: "Could not verify email status. Please try again.",
+                            variant: "destructive",
+                          });
+                        });
                     })} className="space-y-4">
                       <FormField
                         control={verificationForm.control}
@@ -331,7 +378,30 @@ export default function AuthPage() {
                       <form onSubmit={resendForm.handleSubmit(() => {
                         // Make sure we're using the correct email for resending
                         const resendData = { email: registeredEmail };
-                        resendVerificationMutation.mutate(resendData);
+                        
+                        // First check if email exists before sending verification code
+                        apiRequest('POST', '/api/check-email', { email: registeredEmail })
+                          .then(res => res.json())
+                          .then(data => {
+                            if (data.exists) {
+                              // Email exists, proceed with resending verification
+                              resendVerificationMutation.mutate(resendData);
+                            } else {
+                              // Email doesn't exist in the system
+                              toast({
+                                title: "Email not found",
+                                description: "This email is not registered. Please register first.",
+                                variant: "destructive",
+                              });
+                            }
+                          })
+                          .catch(error => {
+                            toast({
+                              title: "Error checking email",
+                              description: "Could not verify email status. Please try again.",
+                              variant: "destructive",
+                            });
+                          });
                       })} className="space-y-4">
                         <Button
                           type="submit"
