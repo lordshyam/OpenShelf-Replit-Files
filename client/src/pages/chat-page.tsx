@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -7,12 +7,14 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { type Chat, type Book, type CommunityChat, type Community, type User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, BookOpen, Users, PlusCircle, LogOut, Globe, Lock } from "lucide-react";
+import { Send, Loader2, BookOpen, Users, PlusCircle, LogOut, Globe, Lock, UserCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { BookImage } from "@/components/book-image";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type ChatRoom = {
   userId: number;
@@ -390,11 +392,153 @@ export default function ChatPage() {
                           // Find the proper user information for this message
                           const messageUserData = allUsers?.find(u => u.id === msg.userId);
                           const isAdmin = communities?.find(c => c.id === user.communityId)?.createdBy === msg.userId;
+                          const isSystemMessage = msg.userId === 0;
                           
                           const messageUser = {
                             username: messageUserData?.username || (isAdmin ? "Admin" : `User ${msg.userId}`),
                             avatar: messageUserData?.avatar || null
                           };
+                          
+                          // Check if this is a book listing message
+                          const bookListingInfo = (msg: CommunityChat): { isBookListing: boolean, book?: Book, username?: string } => {
+                            if (!isSystemMessage) return { isBookListing: false };
+                            
+                            // Extract pattern: "<username> has listed a new book"
+                            const match = msg.message.match(/^(.+?) has listed a new book:/);
+                            if (!match) return { isBookListing: false };
+                            
+                            // Find the book in the system
+                            // Look for exact title match in the message
+                            const titleMatch = msg.message.match(/"([^"]+)"/);
+                            if (!titleMatch) return { isBookListing: false };
+                            
+                            const bookTitle = titleMatch[1];
+                            const matchedBook = books?.find(b => 
+                              b.title === bookTitle && 
+                              b.communityId === user.communityId
+                            );
+                            
+                            if (!matchedBook) return { isBookListing: false };
+                            
+                            return { 
+                              isBookListing: true, 
+                              book: matchedBook,
+                              username: match[1] 
+                            };
+                          };
+                          
+                          const { isBookListing, book, username } = bookListingInfo(msg);
+                          
+                          if (isBookListing && book) {
+                            return (
+                              <div key={i} className="w-full mb-2">
+                                <div className="bg-secondary/30 text-secondary-foreground rounded-t-lg p-3 text-sm font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="w-6 h-6">
+                                      {messageUserData?.avatar ? (
+                                        <AvatarImage src={messageUserData.avatar} />
+                                      ) : (
+                                        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                                          {username?.charAt(0).toUpperCase() || "O"}
+                                        </AvatarFallback>
+                                      )}
+                                    </Avatar>
+                                    <span>{username} has listed a new book:</span>
+                                  </div>
+                                </div>
+                                
+                                <Card className="overflow-hidden border rounded-b-lg rounded-t-none">
+                                  <BookImage 
+                                    imageUrl={book.imageUrl} 
+                                    title={book.title} 
+                                    height="h-48"
+                                  />
+                                  <CardHeader>
+                                    <CardTitle className="flex items-center space-x-2">
+                                      <BookOpen className="h-5 w-5 text-primary" />
+                                      <span>{book.title}</span>
+                                    </CardTitle>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground">{book.author}</p>
+                                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                        {book.genre}
+                                      </span>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <ScrollArea className="h-24">
+                                      <p className="text-sm">{book.description}</p>
+                                    </ScrollArea>
+                                    <div className="flex items-center mt-4 text-sm text-muted-foreground">
+                                      <div className="flex items-center">
+                                        <UserCheck className="h-4 w-4 mr-1" />
+                                        <span>Available for borrowing</span>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                  <CardFooter>
+                                    <Button
+                                      className="w-full"
+                                      disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || book.borrowed}
+                                      onClick={() => {
+                                        const userCredits = user?.credits ?? 0;
+                                        if (userCredits < 1) {
+                                          toast({
+                                            title: "Insufficient credits",
+                                            description: "You need 1 credit to borrow a book. List your books to earn credits!",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
+                                        
+                                        if (book.ownerId === user?.id) {
+                                          toast({
+                                            title: "Cannot borrow own book",
+                                            description: "You cannot borrow books that you have listed.",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
+                                        
+                                        if (book.borrowed) {
+                                          toast({
+                                            title: "Book unavailable",
+                                            description: "This book is already borrowed by someone else.",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
+                                        
+                                        apiRequest("POST", `/api/borrow-requests`, { bookId: book.id })
+                                          .then(() => {
+                                            toast({
+                                              title: "Request Sent",
+                                              description: "Book borrow request has been sent to the owner.",
+                                            });
+                                          })
+                                          .catch(error => {
+                                            toast({
+                                              title: "Error",
+                                              description: error.message,
+                                              variant: "destructive",
+                                            });
+                                          });
+                                      }}
+                                    >
+                                      {book.ownerId === user?.id 
+                                        ? "Your Book" 
+                                        : book.borrowed 
+                                          ? "Currently Borrowed" 
+                                          : "Borrow Book"}
+                                    </Button>
+                                  </CardFooter>
+                                </Card>
+                                <div className="text-xs text-muted-foreground text-right mt-1">
+                                  {new Date(msg.timestamp).toLocaleString()}
+                                </div>
+                              </div>
+                            );
+                          }
                             
                           return (
                             <div
@@ -416,11 +560,15 @@ export default function ChatPage() {
                                 className={`max-w-[80%] rounded-lg px-4 py-2 ${
                                   msg.userId === user!.id
                                     ? "bg-primary text-primary-foreground"
+                                    : isSystemMessage
+                                    ? "bg-secondary/20 text-secondary-foreground"
                                     : "bg-muted"
                                 }`}
                               >
                                 {msg.userId !== user!.id && (
-                                  <p className="text-xs font-medium mb-1">{messageUser.username}</p>
+                                  <p className="text-xs font-medium mb-1">
+                                    {isSystemMessage ? "OpenShelf" : messageUser.username}
+                                  </p>
                                 )}
                                 <p className="text-sm">{msg.message}</p>
                                 <span className="text-xs opacity-70">

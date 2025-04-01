@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './use-auth';
 import { useToast } from './use-toast';
 import { queryClient } from '@/lib/queryClient';
-import type { Chat, CommunityChat } from '@shared/schema';
+import type { Chat, CommunityChat, Book } from '@shared/schema';
 
 type WebSocketContextType = {
   send: (message: any) => void;
@@ -75,6 +75,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             case 'COMMUNITY_CHAT':
               console.log('Received community chat message:', data);
               const communityChat = data.chat as CommunityChat;
+              
+              // Get additional data if this is a book listing message
+              if (data.book) {
+                // Update books query to include the new book if not already there
+                queryClient.setQueryData(["/api/books"], (oldBooks: Book[] | undefined) => {
+                  if (!oldBooks) return [data.book];
+                  
+                  // Don't add duplicate books
+                  const isDuplicateBook = oldBooks.some(b => b.id === data.book.id);
+                  if (isDuplicateBook) return oldBooks;
+                  
+                  return [...oldBooks, data.book];
+                });
+              }
               
               // Only process if we have user data
               if (user) {
