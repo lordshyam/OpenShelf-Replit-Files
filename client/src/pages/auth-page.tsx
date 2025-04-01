@@ -508,7 +508,11 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full">
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={loginMutation.isPending}
+                      >
                         {loginMutation.isPending ? "Logging in..." : "Login"}
                       </Button>
                     </form>
@@ -614,8 +618,12 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full">
-                        {registerForm.formState.isSubmitting ? "Creating account..." : "Create Account"}
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={registerForm.formState.isSubmitting || registerMutation.isPending}
+                      >
+                        {registerForm.formState.isSubmitting || registerMutation.isPending ? "Creating account..." : "Create Account"}
                       </Button>
                     </form>
                   </Form>

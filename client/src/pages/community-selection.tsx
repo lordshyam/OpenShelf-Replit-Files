@@ -222,7 +222,7 @@ export default function CommunitySelection() {
                       disabled={joinCommunityMutation.isPending}
                     >
                       <Users className="mr-2 h-4 w-4" />
-                      Join Community
+                      {joinCommunityMutation.isPending ? "Joining..." : "Join Community"}
                     </Button>
                   </CardContent>
                 </Card>

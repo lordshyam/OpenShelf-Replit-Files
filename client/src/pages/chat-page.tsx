@@ -35,6 +35,7 @@ export default function ChatPage() {
   const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const communityScrollRef = useRef<HTMLDivElement>(null);
+  const [joiningCommunityId, setJoiningCommunityId] = useState<number | null>(null);
 
   const { data: books } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -508,7 +509,11 @@ export default function ChatPage() {
                                 <Button 
                                   size="sm" 
                                   className="w-full"
+                                  disabled={joiningCommunityId === community.id}
                                   onClick={() => {
+                                    // Set joining state
+                                    setJoiningCommunityId(community.id);
+                                    
                                     apiRequest("POST", `/api/communities/${community.id}/join`)
                                       .then(res => res.json())
                                       .then(data => {
@@ -525,6 +530,9 @@ export default function ChatPage() {
                                             description: "Joined community successfully",
                                           });
                                         }
+                                        
+                                        // Reset joining state
+                                        setJoiningCommunityId(null);
                                       })
                                       .catch(error => {
                                         toast({
@@ -532,11 +540,14 @@ export default function ChatPage() {
                                           description: error.message,
                                           variant: "destructive",
                                         });
+                                        
+                                        // Reset joining state
+                                        setJoiningCommunityId(null);
                                       });
                                   }}
                                 >
                                   <Users className="mr-2 h-3 w-3" />
-                                  Join
+                                  {joiningCommunityId === community.id ? "Joining..." : "Join"}
                                 </Button>
                               </CardContent>
                             </Card>

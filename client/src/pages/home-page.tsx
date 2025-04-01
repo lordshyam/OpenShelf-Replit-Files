@@ -178,7 +178,7 @@ export default function HomePage() {
               <CardFooter>
                 <Button
                   className="w-full"
-                  disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id}
+                  disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || borrowBookMutation.isPending}
                   onClick={() => {
                     const userCredits = user?.credits ?? 0;
                     if (userCredits < 1) {
@@ -202,7 +202,8 @@ export default function HomePage() {
                     borrowBookMutation.mutate(book.id.toString());
                   }}
                 >
-                  {book.ownerId === user?.id ? "Your Book" : "Borrow Book"}
+                  {book.ownerId === user?.id ? "Your Book" : 
+                   borrowBookMutation.isPending ? "Sending Request..." : "Borrow Book"}
                 </Button>
               </CardFooter>
             </Card>
