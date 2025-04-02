@@ -509,7 +509,7 @@ export default function ChatPage() {
                                           return;
                                         }
                                         
-                                        apiRequest("POST", `/api/borrow-requests`, { bookId: book.id })
+                                        apiRequest("POST", `/api/books/${book.id}/borrow`)
                                           .then(() => {
                                             toast({
                                               title: "Request Sent",
