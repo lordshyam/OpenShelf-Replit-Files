@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Book as BookIcon, MapPin, UserCheck, Search, BookOpen, Library } from "lucide-react";
+import { Book as BookIcon, MapPin, UserCheck, Search, BookOpen, Library, Calendar } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Book, InsertBook } from "@shared/schema";
@@ -11,6 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { BookImage } from "@/components/book-image";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,9 +56,15 @@ export default function HomePage() {
     },
   });
 
+  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
+  const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  
   const borrowBookMutation = useMutation({
-    mutationFn: async (bookId: string | number) => {
-      const res = await apiRequest("POST", `/api/books/${bookId}/borrow`);
+    mutationFn: async (data: { bookId: string | number, requestedReturnDate?: Date }) => {
+      const res = await apiRequest("POST", `/api/books/${data.bookId}/borrow`, { 
+        requestedReturnDate: data.requestedReturnDate
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -63,6 +72,9 @@ export default function HomePage() {
         title: "Success",
         description: "Borrow request sent to the owner",
       });
+      setDatePickerOpen(false);
+      setReturnDate(undefined);
+      setSelectedBookId(null);
     },
     onError: (error: Error) => {
       toast({
@@ -82,8 +94,65 @@ export default function HomePage() {
     });
   }
 
+  // Get tomorrow's date for the minimum date in the calendar
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Get the date 4 weeks from now for the default return date suggestion
+  const fourWeeksFromNow = new Date();
+  fourWeeksFromNow.setDate(fourWeeksFromNow.getDate() + 28);
+
+  // Handle book borrow request with return date
+  const handleBorrowBook = () => {
+    if (selectedBookId) {
+      borrowBookMutation.mutate({
+        bookId: selectedBookId,
+        requestedReturnDate: returnDate
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Date Picker Dialog */}
+      <Dialog open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Select a Return Date</DialogTitle>
+            <DialogDescription>
+              Choose when you plan to return this book. The book owner will receive this information with your request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="returnDate">Return Date</Label>
+                <div className="border rounded-md p-4">
+                  <CalendarComponent
+                    mode="single"
+                    selected={returnDate || fourWeeksFromNow}
+                    onSelect={setReturnDate}
+                    disabled={(date) => date < tomorrow}
+                    className="mx-auto"
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Please select a date when you expect to return the book.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDatePickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBorrowBook} disabled={!returnDate || borrowBookMutation.isPending}>
+              {borrowBookMutation.isPending ? "Sending Request..." : "Confirm Borrow Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Hero Section */}
       <section className="bg-primary text-primary-foreground py-16">
         <div className="container mx-auto px-4">
@@ -199,7 +268,10 @@ export default function HomePage() {
                       return;
                     }
 
-                    borrowBookMutation.mutate(book.id.toString());
+                    // Open date picker with the selected book ID
+                    setSelectedBookId(book.id);
+                    setReturnDate(fourWeeksFromNow); // Set default date
+                    setDatePickerOpen(true);
                   }}
                 >
                   {book.ownerId === user?.id ? "Your Book" : 

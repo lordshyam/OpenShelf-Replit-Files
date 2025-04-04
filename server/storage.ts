@@ -356,6 +356,7 @@ export class MemStorage implements IStorage {
       id,
       status: "pending",
       createdAt: new Date(),
+      requestedReturnDate: request.requestedReturnDate || null,
     };
     this.borrowRequests.set(id, borrowRequest);
     return borrowRequest;

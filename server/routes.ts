@@ -655,17 +655,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    // Create a borrow request
+    // Get the requested return date from the request body (if provided)
+    const requestedReturnDate = req.body.requestedReturnDate ? new Date(req.body.requestedReturnDate) : undefined;
+    
+    // Create a borrow request with the return date
     const request = await storage.createBorrowRequest({
       bookId,
       requesterId: req.user!.id,
+      requestedReturnDate,
     });
 
-    // Send a chat message to the book owner
+    // Send a chat message to the book owner with return date info
+    let requestMessage = `I would like to borrow "${book.title}".`;
+    if (requestedReturnDate) {
+      const dateFormatter = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      requestMessage += ` I plan to return it by ${dateFormatter.format(requestedReturnDate)}.`;
+    }
+    requestMessage += " Please review my request.";
+    
     const chat = await storage.createChat({
       senderId: req.user!.id,
       receiverId: book.ownerId,
-      message: `I would like to borrow "${book.title}". Please review my request.`,
+      message: requestMessage,
       bookId,
     });
 
@@ -707,10 +722,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.updateBorrowRequest(requestId, "accepted");
 
     // Update the book status
+    const twoWeeksFromNow = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 2 weeks
     await storage.updateBook(book.id, {
       borrowed: true,
       borrowerId: request.requesterId,
-      borrowDeadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks
+      borrowDeadline: request.requestedReturnDate || twoWeeksFromNow,
     });
 
     // Deduct credits from borrower and broadcast update

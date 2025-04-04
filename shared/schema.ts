@@ -73,6 +73,7 @@ export const borrowRequests = pgTable("borrowRequests", {
   requesterId: integer("requester_id").notNull(),
   status: text("status").notNull().default("pending"), // pending, accepted, declined
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  requestedReturnDate: timestamp("requested_return_date"),
 });
 
 export const chats = pgTable("chats", {
@@ -126,6 +127,8 @@ export const insertBorrowRequestSchema = createInsertSchema(borrowRequests).omit
   id: true,
   status: true,
   createdAt: true,
+}).extend({
+  requestedReturnDate: z.date().optional(),
 });
 
 export const insertChatSchema = createInsertSchema(chats).omit({
