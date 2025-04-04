@@ -436,6 +436,16 @@ export default function MyLibrary() {
 
             <TabsContent value="borrowed">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {borrowedBooks?.length === 0 && (
+                  <Alert className="col-span-full">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>No borrowed books</AlertTitle>
+                    <AlertDescription>
+                      You haven't borrowed any books yet.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
                 {borrowedBooks?.map(book => (
                   <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                     <BookImage 
@@ -461,7 +471,42 @@ export default function MyLibrary() {
                         <Clock className="mr-1 h-4 w-4" />
                         <span>Due {new Date(book.borrowDeadline!).toLocaleDateString()}</span>
                       </div>
+                      
+                      {/* Return status badge */}
+                      <div className="mt-2">
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          book.returned 
+                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" 
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100"
+                        }`}>
+                          {book.returned ? "Returned" : "Not Returned"}
+                        </span>
+                      </div>
                     </CardContent>
+                    <CardFooter className="pt-0 flex justify-between">
+                      <Button
+                        size="sm"
+                        variant={book.returned ? "outline" : "default"}
+                        onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: true })}
+                        disabled={book.returned || markBookReturnedMutation.isPending}
+                        className="flex-1 mr-2"
+                      >
+                        <Check className="mr-1 h-4 w-4" />
+                        Mark as Returned
+                      </Button>
+                      {book.returned && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: false })}
+                          disabled={markBookReturnedMutation.isPending}
+                          className="flex-1"
+                        >
+                          <X className="mr-1 h-4 w-4" />
+                          Mark as Not Returned
+                        </Button>
+                      )}
+                    </CardFooter>
                   </Card>
                 ))}
               </div>
