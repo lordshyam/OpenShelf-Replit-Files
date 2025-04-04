@@ -185,6 +185,31 @@ export default function MyLibrary() {
       });
     },
   });
+  
+  const markBookReturnedMutation = useMutation({
+    mutationFn: async ({ bookId, returned }: { bookId: number, returned: boolean}) => {
+      const res = await apiRequest("POST", `/api/books/${bookId}/return`, { returned });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || `Failed to mark book as ${returned ? 'returned' : 'not returned'}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      toast({
+        title: "Success!",
+        description: "Book return status updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error updating book return status",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (loadingBooks || loadingBorrowed || loadingRequests) {
     return (

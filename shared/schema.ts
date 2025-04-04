@@ -60,6 +60,7 @@ export const books = pgTable("books", {
   borrowed: boolean("borrowed").default(false),
   borrowerId: integer("borrower_id"),
   borrowDeadline: timestamp("borrow_deadline"),
+  returned: boolean("returned").default(false),
   condition: text("condition"),
   genre: text("genre").notNull(),
   imageUrl: text("image_url"),
@@ -115,6 +116,7 @@ export const insertBookSchema = createInsertSchema(books).omit({
   borrowed: true,
   borrowerId: true,
   borrowDeadline: true,
+  returned: true,
   donated: true,
 }).extend({
   communityId: z.number().optional(),

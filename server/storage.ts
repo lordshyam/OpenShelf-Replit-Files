@@ -321,6 +321,7 @@ export class MemStorage implements IStorage {
       borrowed: false,
       borrowerId: null,
       borrowDeadline: null,
+      returned: false,
       donated: false,
     };
     this.books.set(id, book);

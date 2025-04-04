@@ -643,6 +643,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!book) return res.status(404).send("Book not found");
     if (book.borrowed) return res.status(400).send("Book already borrowed");
     if (req.user!.credits < 1) return res.status(400).send("Insufficient credits");
+    
+    // Check if user has any unreturned books
+    const borrowedBooks = await storage.getBooksByBorrower(req.user!.id);
+    const unreturned = borrowedBooks.filter(b => b.borrowed && !b.returned);
+    
+    if (unreturned.length > 0) {
+      return res.status(400).json({ 
+        message: "You have unreturned books. Please return them before borrowing new ones.",
+        unreturnedBooks: unreturned
+      });
+    }
 
     // Create a borrow request
     const request = await storage.createBorrowRequest({
@@ -811,6 +822,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Legacy account verification endpoint is already implemented in auth.ts
+
+  // Endpoint to mark a book as returned or not returned
+  app.post("/api/books/:id/return", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const bookId = parseInt(req.params.id);
+    const book = await storage.getBooks().then(books =>
+      books.find(b => b.id === bookId)
+    );
+
+    if (!book) return res.status(404).json({ message: "Book not found" });
+    if (!book.borrowed) return res.status(400).json({ message: "Book is not borrowed" });
+    if (book.borrowerId !== req.user!.id) return res.status(403).json({ message: "This is not your borrowed book" });
+
+    const isReturned = req.body.returned === true;
+    
+    // Update the book's return status
+    const updatedBook = await storage.updateBook(bookId, {
+      returned: isReturned
+    });
+
+    // If marked as returned, notify the owner through chat
+    if (isReturned) {
+      const chat = await storage.createChat({
+        senderId: req.user!.id,
+        receiverId: book.ownerId,
+        message: `I've marked "${book.title}" as returned.`,
+        bookId,
+      });
+
+      // Broadcast the chat message
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'CHAT_MESSAGE',
+            chat,
+            bookTitle: book.title
+          }));
+        }
+      });
+    }
+
+    res.json(updatedBook);
+  });
 
   // Development/Admin endpoint to reset all data
   app.post("/api/reset-data", async (req, res) => {
