@@ -30,6 +30,19 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         wsRef.current.onopen = () => {
           console.log('WebSocket connected');
           setConnectionStatus('connected');
+          
+          // After reconnection, refresh critical data
+          if (user?.id) {
+            // Invalidate key queries to ensure data is refreshed
+            queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/chats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+            
+            if (user.communityId) {
+              queryClient.invalidateQueries({ queryKey: ["/api/community-chats"] });
+            }
+          }
+          
           toast({
             title: "Connected",
             description: "Chat connection established",
@@ -146,11 +159,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         wsRef.current.onerror = (error) => {
           console.error('WebSocket error:', error);
           setConnectionStatus('disconnected');
-          toast({
-            title: "Connection Error",
-            description: "Failed to connect to chat server",
-            variant: "destructive",
-          });
+          
+          // Don't show too many reconnection toasts
+          if (!reconnectTimeoutRef.current) {
+            toast({
+              title: "Connection Error",
+              description: "Failed to connect to chat server. Reconnecting...",
+              variant: "destructive",
+            });
+          }
+          
+          // Attempt reconnection on error
+          if (wsRef.current) {
+            try {
+              wsRef.current.close();
+            } catch (e) {
+              // Ignore close errors
+            }
+          }
         };
 
         wsRef.current.onclose = () => {
@@ -183,11 +209,41 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const send = (message: any) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      // If we're not connected, force a reconnection attempt
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (e) {
+          // Ignore close errors
+        }
+      }
+      
+      // Clear existing timeout and restart connection immediately
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = undefined;
+      }
+      
       toast({
         title: "Connection Lost",
-        description: "Trying to reconnect...",
+        description: "Reconnecting and will try to send your message again...",
         variant: "destructive",
       });
+      
+      // Store the message to try sending again after reconnection
+      // This could be enhanced with a proper message queue if needed
+      const storedMessage = message;
+      
+      setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          try {
+            wsRef.current.send(JSON.stringify(storedMessage));
+          } catch (error) {
+            console.error('Error resending message after reconnection:', error);
+          }
+        }
+      }, 3000); // Try resending after 3 seconds
+      
       return;
     }
 
@@ -197,7 +253,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       console.error('Error sending message:', error);
       toast({
         title: "Error",
-        description: "Failed to send message",
+        description: "Failed to send message. Please try again.",
         variant: "destructive",
       });
     }

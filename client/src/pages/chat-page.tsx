@@ -493,7 +493,7 @@ export default function ChatPage() {
                                   <CardFooter>
                                     <Button
                                       className="w-full"
-                                      disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || book.borrowed}
+                                      disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || book.borrowed === true}
                                       onClick={() => {
                                         const userCredits = user?.credits ?? 0;
                                         if (userCredits < 1) {
@@ -514,7 +514,7 @@ export default function ChatPage() {
                                           return;
                                         }
                                         
-                                        if (book.borrowed) {
+                                        if (book.borrowed === true) {
                                           toast({
                                             title: "Book unavailable",
                                             description: "This book is already borrowed by someone else.",
@@ -541,7 +541,7 @@ export default function ChatPage() {
                                     >
                                       {book.ownerId === user?.id 
                                         ? "Your Book" 
-                                        : book.borrowed 
+                                        : book.borrowed === true
                                           ? "Currently Borrowed" 
                                           : "Borrow Book"}
                                     </Button>
