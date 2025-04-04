@@ -135,6 +135,20 @@ export default function ChatPage() {
       communityScrollRef.current.scrollTop = communityScrollRef.current.scrollHeight;
     }
   }, [communityChats]);
+  
+  // Check if we should open the community chat tab (triggered from community management page)
+  useEffect(() => {
+    const shouldOpenCommunity = sessionStorage.getItem('openCommunityChat') === 'true';
+    if (shouldOpenCommunity) {
+      // Get the tab element and click it programmatically
+      const communityTab = document.querySelector('[value="community"]') as HTMLElement;
+      if (communityTab) {
+        communityTab.click();
+      }
+      // Remove the flag from sessionStorage
+      sessionStorage.removeItem('openCommunityChat');
+    }
+  }, []);
 
   const sendMessage = () => {
     if (!newMessage.trim() || !activeChat) return;

@@ -329,7 +329,11 @@ export default function CommunityManagement() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setLocation(`/community-chat/${community.id}`)}
+              onClick={() => {
+                // Navigate to chat page and store a flag to open community tab
+                sessionStorage.setItem('openCommunityChat', 'true');
+                setLocation('/chat');
+              }}
             >
               <MessageSquare className="mr-2 h-4 w-4" />
               Community Chat
