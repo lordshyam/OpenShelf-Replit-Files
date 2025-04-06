@@ -154,11 +154,29 @@ export default function ChatPage() {
   const sendMessage = () => {
     if (!newMessage.trim() || !activeChat) return;
 
+    // Get the book ID if this chat is related to a book
+    const bookId = chatRooms.find(room => room.userId === activeChat)?.bookId;
+    
+    // Create a temporary message to display immediately
+    // Use 'any' type to bypass TypeScript's type checking for the temporary message
+    const tempMessage: any = {
+      id: -1, // Temporary ID that will be replaced by server-assigned ID
+      senderId: user!.id,
+      receiverId: activeChat,
+      message: newMessage,
+      timestamp: new Date(),
+      bookId: bookId || null
+    };
+    
+    // Optimistically add the message to the UI
+    setMessages(prev => [...prev, tempMessage]);
+    
+    // Send the message to the server via WebSocket
     send({
       senderId: user!.id,
       receiverId: activeChat,
       message: newMessage,
-      bookId: chatRooms.find(room => room.userId === activeChat)?.bookId
+      bookId: bookId
     });
 
     setNewMessage("");
@@ -170,6 +188,26 @@ export default function ChatPage() {
     // Find the community name
     const userCommunity = communities?.find(c => c.id === user.communityId);
     
+    // Create a temporary community chat message for immediate display
+    // Use 'any' type to bypass TypeScript's type checking since we need to add a temporary message
+    // that will be replaced by the server's response with the correct types
+    const tempCommunityMessage: any = {
+      id: -1, // Temporary ID that will be replaced by server-assigned ID
+      communityId: user.communityId,
+      userId: user.id,
+      message: communityMessage,
+      timestamp: new Date()
+    };
+    
+    // Optimistically add the message to the UI
+    if (communityChats) {
+      queryClient.setQueryData(
+        ["/api/community-chats", user.communityId], 
+        [...communityChats, tempCommunityMessage]
+      );
+    }
+    
+    // Send the message to the server via WebSocket
     send({
       type: 'COMMUNITY_MESSAGE',
       communityId: user.communityId,
