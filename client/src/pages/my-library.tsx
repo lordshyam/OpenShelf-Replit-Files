@@ -74,7 +74,10 @@ export default function MyLibrary() {
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate both books and user queries to refresh credits display
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      
       toast({
         title: "Success!",
         description: "Book added successfully! You earned 0.5 credits.",
@@ -147,6 +150,7 @@ export default function MyLibrary() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Refresh user credits
       toast({
         title: "Request Accepted",
         description: "The book borrowing request has been accepted and a chat was created.",
@@ -247,6 +251,7 @@ export default function MyLibrary() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }); // Refresh user credits
       toast({
         title: "Return Confirmed!",
         description: "Book has been returned to your collection and is now available for lending again.",
