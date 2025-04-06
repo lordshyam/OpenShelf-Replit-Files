@@ -141,6 +141,27 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               console.log('Community chat message confirmed:', data.chat.id);
               // No need to do anything here since server already broadcasts to everyone
               break;
+            
+            case 'CHAT_MESSAGE_CONFIRMED':
+              console.log('Private chat message confirmed:', data.chat.id);
+              // Update the local chat list with the confirmed message
+              const confirmedChat = data.chat as Chat;
+              queryClient.setQueryData(["/api/chats", user?.id], (oldChats: Chat[] | undefined) => {
+                if (!oldChats) return [confirmedChat];
+                
+                // Don't add duplicate messages
+                const isDuplicate = oldChats.some(
+                  c => c.id === confirmedChat.id || 
+                      (c.senderId === confirmedChat.senderId && 
+                       c.receiverId === confirmedChat.receiverId &&
+                       c.message === confirmedChat.message && 
+                       Math.abs(new Date(c.timestamp).getTime() - new Date(confirmedChat.timestamp).getTime()) < 1000)
+                );
+                
+                if (isDuplicate) return oldChats;
+                return [...oldChats, confirmedChat];
+              });
+              break;
 
             case 'CONNECTION_STATUS':
               setConnectionStatus(data.status === 'connected' ? 'connected' : 'disconnected');
