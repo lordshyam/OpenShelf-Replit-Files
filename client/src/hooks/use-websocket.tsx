@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './use-auth';
 import { useToast } from './use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { queryClient } from '@/lib/queryClient';
 import type { Chat, CommunityChat, Book } from '@shared/schema';
 
@@ -59,6 +60,30 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                   ...oldData,
                   credits: data.credits
                 }));
+              }
+              break;
+              
+            case 'BORROW_REQUEST_NOTIFICATION':
+              // Show notification for book owner
+              if (user?.id) {
+                // Create a toast notification that redirects to the My Library -> Borrow Requests tab
+                toast({
+                  title: "New Borrow Request",
+                  description: data.message,
+                  action: (
+                    <ToastAction altText="View Request" onClick={() => {
+                      // Store the active tab in sessionStorage
+                      sessionStorage.setItem('openMyLibraryTab', 'requests');
+                      // Navigate to My Library
+                      window.location.href = '/my-library';
+                    }}>
+                      View Request
+                    </ToastAction>
+                  ),
+                });
+                
+                // Invalidate borrow requests to make sure they're up to date
+                queryClient.invalidateQueries({ queryKey: ["/api/borrow-requests", user.id] });
               }
               break;
 

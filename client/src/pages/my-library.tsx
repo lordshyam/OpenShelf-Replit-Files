@@ -25,6 +25,19 @@ export default function MyLibrary() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Set the default tab based on sessionStorage (for requests coming from notifications)
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const savedTab = typeof window !== 'undefined' 
+      ? sessionStorage.getItem('openMyLibraryTab') 
+      : null;
+    
+    // Remove the item from sessionStorage after reading it
+    if (savedTab) {
+      sessionStorage.removeItem('openMyLibraryTab');
+    }
+    
+    return savedTab || 'listed';
+  });
 
   const form = useForm<InsertBook>({
     resolver: zodResolver(insertBookSchema),
@@ -469,7 +482,7 @@ export default function MyLibrary() {
         </section>
 
         <div className="container mx-auto px-4 py-8">
-          <Tabs defaultValue="listed" className="space-y-6">
+          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full max-w-md grid-cols-3 bg-primary/5">
               <TabsTrigger value="listed" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Listed Books

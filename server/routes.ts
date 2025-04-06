@@ -691,32 +691,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       requestedReturnDate,
     });
 
-    // Send a chat message to the book owner with return date info
-    let requestMessage = `I would like to borrow "${book.title}".`;
+    // Send a notification to the book owner about the borrow request
+    // Get the requester's username for the notification
+    const requester = await storage.getUser(req.user!.id);
+    
+    // Format return date information
+    let returnDateInfo = "";
     if (requestedReturnDate) {
       const dateFormatter = new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
-      requestMessage += ` I plan to return it by ${dateFormatter.format(requestedReturnDate)}.`;
+      returnDateInfo = ` until ${dateFormatter.format(requestedReturnDate)}`;
     }
-    requestMessage += " Please review my request.";
     
-    const chat = await storage.createChat({
-      senderId: req.user!.id,
-      receiverId: book.ownerId,
-      message: requestMessage,
-      bookId,
-    });
-
-    // Broadcast the chat message
+    // Send the notification to the book owner
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
-          type: 'CHAT_MESSAGE',
-          chat,
-          bookTitle: book.title
+          type: 'BORROW_REQUEST_NOTIFICATION',
+          bookId: book.id,
+          bookTitle: book.title,
+          requesterId: req.user!.id,
+          requesterName: requester ? requester.username : `User #${req.user!.id}`,
+          requestId: request.id,
+          message: `${requester ? requester.username : 'Someone'} would like to borrow "${book.title}"${returnDateInfo}. Please review this request in "My Library" → "Borrow Requests".`
         }));
       }
     });
