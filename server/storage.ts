@@ -1,9 +1,16 @@
-import { User, Book, Chat, BorrowRequest, InsertUser, InsertBook, InsertChat, InsertBorrowRequest, UserPreferences, Community, CommunityJoinRequest, CommunityChat, InsertCommunity, InsertCommunityJoinRequest, InsertCommunityChat } from "@shared/schema";
+import { 
+  User, Book, Chat, BorrowRequest, InsertUser, InsertBook, 
+  InsertChat, InsertBorrowRequest, UserPreferences, Community, 
+  CommunityJoinRequest, CommunityChat, InsertCommunity, 
+  InsertCommunityJoinRequest, InsertCommunityChat, UserReport,
+  InsertUserReport
+} from "@shared/schema";
 import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import memorystore from "memorystore";
 
-const MemoryStore = createMemoryStore(session);
+// Create the memory store for session management
+const MemoryStore = memorystore(session);
 
 export interface IStorage {
   // User operations
@@ -16,6 +23,13 @@ export interface IStorage {
   updateUserCredits(userId: number, credits: number): Promise<void>;
   updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void>;
   deleteUser(id: number): Promise<void>;
+  
+  // User reports
+  getUserReports(): Promise<UserReport[]>;
+  getUserReportsByReporter(reporterId: number): Promise<UserReport[]>;
+  getUserReportsByReported(reportedUserId: number): Promise<UserReport[]>;
+  createUserReport(report: InsertUserReport): Promise<UserReport>;
+  updateUserReportStatus(id: number, status: string): Promise<void>;
 
   // Book operations
   getBooks(): Promise<Book[]>;
@@ -53,7 +67,7 @@ export interface IStorage {
   resetAllData(): void;
   resetEverything(): void;
 
-  sessionStore: ReturnType<typeof createMemoryStore>;
+  sessionStore: any; // Use 'any' for the session store to avoid type issues
 }
 
 export class MemStorage implements IStorage {
@@ -64,8 +78,9 @@ export class MemStorage implements IStorage {
   private communities!: Map<number, Community>;
   private communityJoinRequests!: Map<number, CommunityJoinRequest>;
   private communityChats!: Map<number, CommunityChat>;
+  private userReports!: Map<number, UserReport>;
   private currentId!: number;
-  sessionStore!: ReturnType<typeof createMemoryStore>;
+  sessionStore!: any; // Use 'any' for the session store to avoid type issues
 
   constructor() {
     this.resetAllData();
@@ -82,6 +97,9 @@ export class MemStorage implements IStorage {
     
     // Clear all community join requests since they're tied to users
     this.communityJoinRequests = new Map();
+    
+    // Clear all user reports
+    this.userReports = new Map();
     
     // Initialize maps if they don't exist
     if (!this.books) {
@@ -142,6 +160,7 @@ export class MemStorage implements IStorage {
     this.communities = new Map();
     this.communityJoinRequests = new Map();
     this.communityChats = new Map();
+    this.userReports = new Map();
     this.currentId = 1;
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
@@ -385,6 +404,55 @@ export class MemStorage implements IStorage {
     };
     this.chats.set(id, chat);
     return chat;
+  }
+
+  // User Report methods
+  async getUserReports(): Promise<UserReport[]> {
+    return Array.from(this.userReports.values());
+  }
+
+  async getUserReportsByReporter(reporterId: number): Promise<UserReport[]> {
+    return Array.from(this.userReports.values()).filter(
+      (report) => report.reporterId === reporterId
+    );
+  }
+
+  async getUserReportsByReported(reportedUserId: number): Promise<UserReport[]> {
+    return Array.from(this.userReports.values()).filter(
+      (report) => report.reportedUserId === reportedUserId
+    );
+  }
+
+  async createUserReport(report: InsertUserReport): Promise<UserReport> {
+    const id = this.currentId++;
+    const userReport: UserReport = {
+      id,
+      reporterId: report.reporterId,
+      reportedUserId: report.reportedUserId,
+      reportType: report.reportType,
+      description: report.description,
+      bookId: report.bookId || null,
+      chatId: report.chatId || null,
+      status: "pending",
+      createdAt: new Date(),
+      resolvedAt: null,
+    };
+    this.userReports.set(id, userReport);
+    return userReport;
+  }
+
+  async updateUserReportStatus(id: number, status: string): Promise<void> {
+    const report = this.userReports.get(id);
+    if (!report) throw new Error("User report not found");
+    
+    const updates: Partial<UserReport> = { status };
+    // If the status is not pending, we're resolving the report
+    if (status !== "pending") {
+      updates.resolvedAt = new Date();
+    }
+    
+    const updatedReport = { ...report, ...updates };
+    this.userReports.set(id, updatedReport);
   }
 }
 

@@ -3,7 +3,12 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertBookSchema, insertCommunitySchema, userPreferencesSchema } from "@shared/schema";
+import { 
+  insertBookSchema, 
+  insertCommunitySchema, 
+  userPreferencesSchema,
+  insertUserReportSchema
+} from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -1080,6 +1085,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error resetting data:", error);
       res.status(500).json({ success: false, message: "Error resetting data" });
     }
+  });
+
+  // User reports
+  app.get("/api/user-reports", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Regular users can only see their own reports
+    // Admin would be able to see all (not implemented yet)
+    const reports = await storage.getUserReportsByReporter(req.user!.id);
+    res.json(reports);
+  });
+
+  app.post("/api/user-reports", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Make sure the current user is the reporter
+      req.body.reporterId = req.user!.id;
+      
+      // Parse and validate the report data
+      const reportData = insertUserReportSchema.parse(req.body);
+      
+      // Create the report
+      const report = await storage.createUserReport(reportData);
+      
+      // Send notification to the reported user
+      const systemMessage = await storage.createChat({
+        senderId: 0, // System user ID
+        receiverId: reportData.reportedUserId,
+        message: `A user has reported an issue regarding ${reportData.reportType.replace(/_/g, ' ')}. Our moderation team will review the report.`,
+      });
+      
+      // Notify admin (via WebSocket)
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'NEW_REPORT',
+            report,
+          }));
+        }
+      });
+      
+      res.status(201).json(report);
+    } catch (error) {
+      res.status(400).json({ message: (error as Error).message });
+    }
+  });
+
+  // Update report status (for admins)
+  app.patch("/api/user-reports/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // In a real app, check if user is admin
+    // if (!req.user!.isAdmin) return res.sendStatus(403);
+    
+    const id = parseInt(req.params.id);
+    const { status } = req.body;
+    
+    if (!status || !['pending', 'reviewed', 'dismissed', 'actioned'].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+    
+    try {
+      await storage.updateUserReportStatus(id, status);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(404).json({ message: (error as Error).message });
+    }
+  });
+
+  // Automated reminder system for book returns
+  // This would typically be run via a scheduler, but for demo purposes, we'll check on API calls
+  app.get("/api/check-overdue-books", async (req, res) => {
+    // Check for books with passed deadline
+    const books = await storage.getBooks();
+    const now = new Date();
+    const overdueBooks = books.filter(book => 
+      book.borrowed && 
+      book.borrowDeadline && 
+      new Date(book.borrowDeadline) < now && 
+      !book.returned
+    );
+    
+    // Process each overdue book
+    for (const book of overdueBooks) {
+      if (!book.borrowerId) continue;
+      
+      const owner = await storage.getUser(book.ownerId);
+      const borrower = await storage.getUser(book.borrowerId);
+      
+      if (!owner || !borrower) continue;
+      
+      // Create reminder chat message
+      await storage.createChat({
+        senderId: 0, // System
+        receiverId: book.borrowerId,
+        message: `REMINDER: "${book.title}" is overdue for return. Please return it to ${owner.username} as soon as possible or contact them to make arrangements.`,
+        bookId: book.id,
+      });
+      
+      // Send email (mock - would be implemented in production)
+      console.log(`OVERDUE BOOK REMINDER EMAIL to ${borrower.email} about "${book.title}"`);
+      
+      // Notify via WebSocket for real-time updates
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'BOOK_OVERDUE',
+            book,
+            overdueDays: Math.floor((now.getTime() - new Date(book.borrowDeadline!).getTime()) / (1000 * 60 * 60 * 24))
+          }));
+        }
+      });
+    }
+    
+    res.json({ 
+      checked: books.length,
+      overdue: overdueBooks.length,
+      books: overdueBooks.map(b => ({ 
+        id: b.id, 
+        title: b.title, 
+        borrowDeadline: b.borrowDeadline,
+        daysOverdue: Math.floor((now.getTime() - new Date(b.borrowDeadline!).getTime()) / (1000 * 60 * 60 * 24))
+      }))
+    });
   });
 
   return httpServer;

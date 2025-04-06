@@ -15,6 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { BookImage } from "@/components/book-image";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { UserReportDialog } from "@/components/user-report-dialog";
 
 type ChatRoom = {
   userId: number;
@@ -255,6 +256,34 @@ export default function ChatPage() {
                   <div className="flex-1 flex flex-col">
                     {activeChat ? (
                       <>
+                        {/* Chat header with user info and report button */}
+                        {activeChat !== 0 && (
+                          <div className="flex justify-between items-center p-2 mb-2 border-b">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="w-6 h-6">
+                                {allUsers?.find(u => u.id === activeChat)?.avatar ? (
+                                  <AvatarImage src={allUsers?.find(u => u.id === activeChat)?.avatar || ""} />
+                                ) : (
+                                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                                    {chatRooms.find(r => r.userId === activeChat)?.username.charAt(0).toUpperCase() || "?"}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <span className="font-medium">
+                                {chatRooms.find(r => r.userId === activeChat)?.username}
+                              </span>
+                            </div>
+                            
+                            {/* Report user button */}
+                            <UserReportDialog 
+                              reportedUserId={activeChat}
+                              reportedUsername={chatRooms.find(r => r.userId === activeChat)?.username || "User"}
+                              bookId={chatRooms.find(r => r.userId === activeChat)?.bookId}
+                              bookTitle={chatRooms.find(r => r.userId === activeChat)?.bookTitle}
+                            />
+                          </div>
+                        )}
+                        
                         <div ref={scrollRef} className="flex-1 overflow-y-auto pr-4">
                           <div className="space-y-4">
                             {messages.map((msg, i) => {
@@ -304,9 +333,22 @@ export default function ChatPage() {
                                       </p>
                                     )}
                                     <p className="text-sm">{msg.message}</p>
-                                    <span className="text-xs opacity-70">
-                                      {new Date(msg.timestamp).toLocaleTimeString()}
-                                    </span>
+                                    <div className="flex justify-between items-center mt-1">
+                                      <span className="text-xs opacity-70">
+                                        {new Date(msg.timestamp).toLocaleTimeString()}
+                                      </span>
+                                      
+                                      {/* Only show report button for non-system messages from other users */}
+                                      {msg.senderId !== user!.id && !isSystemMessage && (
+                                        <UserReportDialog
+                                          reportedUserId={msg.senderId}
+                                          reportedUsername={messageUser?.username || `User ${msg.senderId}`}
+                                          bookId={msg.bookId || undefined}
+                                          bookTitle={books?.find(b => b.id === msg.bookId)?.title}
+                                          chatId={msg.id}
+                                        />
+                                      )}
+                                    </div>
                                   </div>
                                   {msg.senderId === user!.id && user && (
                                     <Avatar className="ml-2">
@@ -585,9 +627,19 @@ export default function ChatPage() {
                                   </p>
                                 )}
                                 <p className="text-sm">{msg.message}</p>
-                                <span className="text-xs opacity-70">
-                                  {new Date(msg.timestamp).toLocaleTimeString()}
-                                </span>
+                                <div className="flex justify-between items-center mt-1">
+                                  <span className="text-xs opacity-70">
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                  </span>
+                                  
+                                  {/* Only show report button for non-system messages from other users */}
+                                  {msg.userId !== user!.id && !isSystemMessage && (
+                                    <UserReportDialog
+                                      reportedUserId={msg.userId}
+                                      reportedUsername={messageUser.username}
+                                    />
+                                  )}
+                                </div>
                               </div>
                               {msg.userId === user?.id && user && (
                                 <Avatar className="ml-2">

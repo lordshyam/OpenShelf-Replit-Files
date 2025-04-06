@@ -113,6 +113,19 @@ export const communityChats = pgTable("community_chats", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
+export const userReports = pgTable("user_reports", {
+  id: serial("id").primaryKey(),
+  reporterId: integer("reporter_id").notNull(),
+  reportedUserId: integer("reported_user_id").notNull(),
+  reportType: text("report_type").notNull(), // inappropriate_message, book_damage, not_returned, other
+  description: text("description").notNull(),
+  bookId: integer("book_id"), // Optional, only if report is about a book
+  chatId: integer("chat_id"), // Optional, only if report is about a chat
+  status: text("status").notNull().default("pending"), // pending, reviewed, dismissed, actioned
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
 export const insertBookSchema = createInsertSchema(books).omit({
   id: true,
   borrowed: true,
@@ -163,6 +176,16 @@ export const insertCommunityChatSchema = createInsertSchema(communityChats).omit
   timestamp: true,
 });
 
+export const insertUserReportSchema = createInsertSchema(userReports).omit({
+  id: true,
+  status: true,
+  createdAt: true,
+  resolvedAt: true,
+}).extend({
+  reportType: z.enum(['inappropriate_message', 'book_damage', 'not_returned', 'not_marking_returned', 'other']),
+  description: z.string().min(10, "Please provide a detailed description").max(500, "Description too long"),
+});
+
 export const bookGenres = [
   "Fiction",
   "Non-Fiction",
@@ -198,6 +221,8 @@ export type UserPreferences = z.infer<typeof userPreferencesSchema>;
 export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
 export type InsertCommunityJoinRequest = z.infer<typeof insertCommunityJoinRequestSchema>;
 export type InsertCommunityChat = z.infer<typeof insertCommunityChatSchema>;
+export type InsertUserReport = z.infer<typeof insertUserReportSchema>;
 export type Community = typeof communities.$inferSelect;
 export type CommunityJoinRequest = typeof communityJoinRequests.$inferSelect;
 export type CommunityChat = typeof communityChats.$inferSelect;
+export type UserReport = typeof userReports.$inferSelect;
