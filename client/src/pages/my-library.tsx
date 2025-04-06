@@ -148,6 +148,44 @@ export default function MyLibrary() {
       });
       return;
     }
+    
+    // Additional validation to ensure required fields are provided
+    if (!data.title || data.title.trim() === "") {
+      toast({
+        title: "Missing Information",
+        description: "Please provide a book title",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.author || data.author.trim() === "") {
+      toast({
+        title: "Missing Information",
+        description: "Please provide the author's name",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.description || data.description.trim() === "") {
+      toast({
+        title: "Missing Information",
+        description: "Please provide a book description",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.imageUrl || data.imageUrl.trim() === "") {
+      toast({
+        title: "Missing Information",
+        description: "Please upload a book image",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     addBookMutation.mutate(data);
   };
 
@@ -414,58 +452,72 @@ export default function MyLibrary() {
                           </FormItem>
                         )}
                       />
-                      <div className="space-y-4">
-                        <label className="block text-sm font-medium">Book Image</label>
-                        {imagePreview && (
-                          <div className="relative w-full rounded-lg overflow-hidden">
-                            <div className="relative h-48">
-                              <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                className="absolute top-2 right-2"
-                                onClick={() => {
-                                  setImagePreview(null);
-                                  form.setValue("imageUrl", "");
-                                }}
-                              >
-                                Remove
-                              </Button>
+                      <FormField
+                        control={form.control}
+                        name="imageUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Book Image</FormLabel>
+                            <div className="space-y-4">
+                              {imagePreview && (
+                                <div className="relative w-full rounded-lg overflow-hidden">
+                                  <div className="relative h-48">
+                                    <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      className="absolute top-2 right-2"
+                                      onClick={() => {
+                                        setImagePreview(null);
+                                        form.setValue("imageUrl", "");
+                                      }}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageCapture}
+                                    className="hidden"
+                                    id="image-upload"
+                                  />
+                                  <label htmlFor="image-upload">
+                                    <Button type="button" variant="outline" className="w-full" asChild>
+                                      <span>
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Upload Image
+                                      </span>
+                                    </Button>
+                                  </label>
+                                </div>
+                                <div>
+                                  <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    className="w-full"
+                                    onClick={() => setCameraOpen(true)}
+                                  >
+                                    <Camera className="mr-2 h-4 w-4" />
+                                    Use Camera
+                                  </Button>
+                                </div>
+                              </div>
+                              {!imagePreview && (
+                                <p className="text-sm text-muted-foreground">
+                                  Please upload or capture an image of the book cover
+                                </p>
+                              )}
                             </div>
-                          </div>
+                            <FormMessage />
+                          </FormItem>
                         )}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleImageCapture}
-                              className="hidden"
-                              id="image-upload"
-                            />
-                            <label htmlFor="image-upload">
-                              <Button type="button" variant="outline" className="w-full" asChild>
-                                <span>
-                                  <Upload className="mr-2 h-4 w-4" />
-                                  Upload Image
-                                </span>
-                              </Button>
-                            </label>
-                          </div>
-                          <div>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              className="w-full"
-                              onClick={() => setCameraOpen(true)}
-                            >
-                              <Camera className="mr-2 h-4 w-4" />
-                              Use Camera
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      />
                       <Button
                         type="submit"
                         className="w-full"

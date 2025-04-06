@@ -137,6 +137,10 @@ export const insertBookSchema = createInsertSchema(books).omit({
 }).extend({
   communityId: z.number().optional(),
   unlisted: z.boolean().optional().default(false),
+  title: z.string().min(1, "Title is required"),
+  author: z.string().min(1, "Author name is required"),
+  description: z.string().min(1, "Description is required"),
+  imageUrl: z.string().min(1, "Book image is required"),
 });
 
 export const insertBorrowRequestSchema = createInsertSchema(borrowRequests).omit({
