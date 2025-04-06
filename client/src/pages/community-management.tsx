@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Users, 
@@ -393,11 +393,11 @@ export default function CommunityManagement() {
                       <div className="flex items-center gap-3">
                         <Avatar>
                           {member.avatar ? (
-                            <img src={member.avatar} alt={member.username} />
+                            <AvatarImage src={member.avatar} alt={member.username} />
                           ) : (
-                            <div className="bg-primary text-primary-foreground w-full h-full flex items-center justify-center text-lg font-semibold">
+                            <AvatarFallback className="bg-primary text-primary-foreground">
                               {member.username.charAt(0).toUpperCase()}
-                            </div>
+                            </AvatarFallback>
                           )}
                         </Avatar>
                         <div>
@@ -471,11 +471,11 @@ export default function CommunityManagement() {
                           <div className="flex items-center gap-3">
                             <Avatar>
                               {requester?.avatar ? (
-                                <img src={requester.avatar} alt={requester.username} />
+                                <AvatarImage src={requester.avatar} alt={requester.username} />
                               ) : (
-                                <div className="bg-primary/10 text-primary w-full h-full flex items-center justify-center text-lg font-semibold">
+                                <AvatarFallback className="bg-primary/10 text-primary">
                                   {requester?.username.charAt(0).toUpperCase() || "?"}
-                                </div>
+                                </AvatarFallback>
                               )}
                             </Avatar>
                             <div>
