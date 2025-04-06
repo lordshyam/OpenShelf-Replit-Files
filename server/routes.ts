@@ -11,6 +11,9 @@ import {
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Reset all data on server start for development/testing purposes
+  storage.resetEverything();
+  
   setupAuth(app);
 
   const httpServer = createServer(app);

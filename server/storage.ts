@@ -153,6 +153,7 @@ export class MemStorage implements IStorage {
   
   // Full reset for development purposes - not used in production
   resetEverything(): void {
+    console.log("Performing complete memory storage reset for ALL data...");
     this.users = new Map();
     this.books = new Map();
     this.chats = new Map();
@@ -165,6 +166,7 @@ export class MemStorage implements IStorage {
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
+    console.log("Memory storage reset complete.");
   }
 
   // Implement new community methods
