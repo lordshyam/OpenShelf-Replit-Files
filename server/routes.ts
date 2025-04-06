@@ -7,8 +7,10 @@ import {
   insertBookSchema, 
   insertCommunitySchema, 
   userPreferencesSchema,
-  insertUserReportSchema
+  insertUserReportSchema,
+  User
 } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Reset all data on server start for development/testing purposes
@@ -123,6 +125,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
+  });
+
+  // Get current user info
+  app.get("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    res.json(req.user);
+  });
+
+  // Update user location
+  app.post("/api/user/location", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Validate request body
+    const locationSchema = z.object({
+      state: z.string().min(1, "State is required"),
+      city: z.string().min(1, "City is required")
+    });
+    
+    const result = locationSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ message: "Invalid location data", errors: result.error.format() });
+    }
+    
+    // Update user location
+    await storage.updateUser(req.user!.id, {
+      state: result.data.state,
+      city: result.data.city,
+      locationVerified: true
+    });
+    
+    res.json({ message: "Location updated successfully" });
   });
 
   // Get all users (for chat and message display)
@@ -542,7 +575,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Books
   app.get("/api/books", async (req, res) => {
     let books = await storage.getBooks();
-
+    let bookOwners: Map<number, typeof User> = new Map();
+    
     // If communityId is provided, filter by it
     if (req.query.communityId) {
       const communityId = parseInt(req.query.communityId as string);
@@ -558,6 +592,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.isAuthenticated() && req.user?.id) {
       // For authenticated users, only hide unlisted books that they don't own
       books = books.filter(book => !book.unlisted || book.ownerId === req.user!.id);
+      
+      // Apply location-based filtering (if user has a verified location)
+      if (req.user.locationVerified && req.user.state && req.user.city) {
+        // Get all book owners' data for location matching
+        for (const book of books) {
+          if (!bookOwners.has(book.ownerId)) {
+            const owner = await storage.getUser(book.ownerId);
+            if (owner) {
+              bookOwners.set(book.ownerId, owner);
+            }
+          }
+        }
+        
+        // Sort books by location proximity:
+        // 1. Books in same city first
+        // 2. Books in same state next
+        // 3. All other books last
+        books.sort((a, b) => {
+          const ownerA = bookOwners.get(a.ownerId);
+          const ownerB = bookOwners.get(b.ownerId);
+          
+          // If both owners have verified locations
+          if (ownerA?.locationVerified && ownerB?.locationVerified) {
+            // If a is in same city but b isn't
+            if (ownerA.city === req.user!.city && ownerB.city !== req.user!.city) {
+              return -1;
+            }
+            // If b is in same city but a isn't
+            if (ownerB.city === req.user!.city && ownerA.city !== req.user!.city) {
+              return 1;
+            }
+            // If both are not in same city, check state
+            if (ownerA.city !== req.user!.city && ownerB.city !== req.user!.city) {
+              // If a is in same state but b isn't
+              if (ownerA.state === req.user!.state && ownerB.state !== req.user!.state) {
+                return -1;
+              }
+              // If b is in same state but a isn't
+              if (ownerB.state === req.user!.state && ownerA.state !== req.user!.state) {
+                return 1;
+              }
+            }
+          }
+          
+          // Default case: no sorting change
+          return 0;
+        });
+      }
     } else {
       // For unauthenticated users, hide all unlisted books
       books = books.filter(book => !book.unlisted);

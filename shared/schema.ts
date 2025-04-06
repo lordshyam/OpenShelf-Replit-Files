@@ -12,6 +12,9 @@ export const users = pgTable("users", {
   verificationCode: text("verification_code"),
   avatar: text("avatar"),
   communityId: integer("community_id"),
+  state: text("state"),
+  city: text("city"),
+  locationVerified: boolean("location_verified").default(false),
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];
@@ -91,6 +94,8 @@ export const communities = pgTable("communities", {
   name: text("name").notNull(),
   description: text("description"),
   location: text("location").notNull(),
+  state: text("state"),
+  city: text("city"),
   imageUrl: text("image_url"),
   isPublic: boolean("is_public").default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -166,7 +171,9 @@ export const insertCommunitySchema = createInsertSchema(communities).omit({
   id: true,
   createdAt: true,
 }).extend({
-  isPublic: z.boolean().default(true)
+  isPublic: z.boolean().default(true),
+  state: z.string().optional(),
+  city: z.string().optional()
 });
 
 export const insertCommunityJoinRequestSchema = createInsertSchema(communityJoinRequests).omit({

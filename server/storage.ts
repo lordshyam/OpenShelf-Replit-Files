@@ -185,6 +185,8 @@ export class MemStorage implements IStorage {
       id,
       description: insertCommunity.description || null,
       imageUrl: insertCommunity.imageUrl || null,
+      state: insertCommunity.state || null,
+      city: insertCommunity.city || null,
       createdAt: new Date(),
     };
     this.communities.set(id, community);
@@ -282,7 +284,10 @@ export class MemStorage implements IStorage {
       verified: insertUser.verified || false,
       verificationCode: insertUser.verificationCode || null,
       avatar: getRandomAvatar(),
-      communityId: null
+      communityId: null,
+      state: null,
+      city: null,
+      locationVerified: false
     };
     this.users.set(id, user);
     return user;
