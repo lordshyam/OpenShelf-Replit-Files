@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertBookSchema, type InsertBook, type Book, type BorrowRequest, bookGenres } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, BookOpen, Clock, Loader2, Library, Upload, Camera, Check, X, AlertCircle } from "lucide-react";
+import { Plus, BookOpen, Clock, Loader2, Library, Upload, Camera, Check, X, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { BookImage } from "@/components/book-image";
@@ -205,6 +205,84 @@ export default function MyLibrary() {
     onError: (error: Error) => {
       toast({
         title: "Error updating book return status",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const returnBookEarlyMutation = useMutation({
+    mutationFn: async (bookId: number) => {
+      const res = await apiRequest("POST", `/api/books/${bookId}/return-early`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to return book early");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      toast({
+        title: "Success!",
+        description: "Book marked for early return. Please return the physical book to the owner.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error returning book early",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const confirmBookReturnMutation = useMutation({
+    mutationFn: async (bookId: number) => {
+      const res = await apiRequest("POST", `/api/books/${bookId}/confirm-return`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to confirm book return");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      toast({
+        title: "Return Confirmed!",
+        description: "Book has been returned to your collection and is now available for lending again.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error confirming book return",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Define mutation for toggling book visibility (listed/unlisted)
+  const toggleBookVisibilityMutation = useMutation({
+    mutationFn: async (bookId: number) => {
+      const res = await apiRequest("POST", `/api/books/${bookId}/toggle-visibility`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to toggle book visibility");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/books"] });
+      toast({
+        title: data.unlisted ? "Book Unlisted" : "Book Listed",
+        description: data.unlisted 
+          ? "The book is now hidden from other users." 
+          : "The book is now visible to other users.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error toggling visibility",
         description: error.message,
         variant: "destructive",
       });
@@ -442,32 +520,71 @@ export default function MyLibrary() {
                         </>
                       )}
                     </CardContent>
-                    {book.borrowed && (
-                      <CardFooter className="pt-0">
-                        <Button
-                          size="sm"
-                          variant={book.returned ? "outline" : "default"}
-                          onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: true })}
-                          disabled={book.returned || markBookReturnedMutation.isPending}
-                          className="flex-1 mr-2"
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Mark as Returned
-                        </Button>
-                        {book.returned && (
+                    <CardFooter className="pt-0">
+                      {book.borrowed ? (
+                        <>
+                          {book.returned ? (
+                            <div className="w-full grid grid-cols-2 gap-2">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => confirmBookReturnMutation.mutate(book.id)}
+                                disabled={confirmBookReturnMutation.isPending}
+                                className="flex-1"
+                              >
+                                <Check className="mr-1 h-4 w-4" />
+                                Confirm Return
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: false })}
+                                disabled={markBookReturnedMutation.isPending}
+                                className="flex-1"
+                              >
+                                <X className="mr-1 h-4 w-4" />
+                                Not Returned
+                              </Button>
+                            </div>
+                          ) : (
+                            <Alert className="bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
+                              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                              <AlertTitle className="text-amber-800 dark:text-amber-400">Currently Borrowed</AlertTitle>
+                              <AlertDescription className="text-amber-700 dark:text-amber-500 text-xs">
+                                This book is currently borrowed and will be available once returned.
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: false })}
-                            disabled={markBookReturnedMutation.isPending}
-                            className="flex-1"
+                            onClick={() => toggleBookVisibilityMutation.mutate(book.id)}
+                            disabled={toggleBookVisibilityMutation.isPending}
+                            className="w-full"
                           >
-                            <X className="mr-1 h-4 w-4" />
-                            Mark as Not Returned
+                            {book.unlisted ? (
+                              <>
+                                <Eye className="mr-1 h-4 w-4" />
+                                List Book
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="mr-1 h-4 w-4" />
+                                Unlist Book
+                              </>
+                            )}
                           </Button>
-                        )}
-                      </CardFooter>
-                    )}
+                          {book.unlisted && (
+                            <p className="text-xs text-muted-foreground mt-2 text-center">
+                              This book is not visible to other users
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </CardFooter>
                   </Card>
                 ))}
               </div>
@@ -523,7 +640,39 @@ export default function MyLibrary() {
                       </div>
                     </CardContent>
                     <CardFooter className="pt-0">
-                      {/* No buttons for borrowers in this tab; they only see the status */}
+                      {!book.returned && (
+                        <div className="w-full grid grid-cols-2 gap-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => markBookReturnedMutation.mutate({ bookId: book.id, returned: true })}
+                            disabled={markBookReturnedMutation.isPending}
+                            className="w-full"
+                          >
+                            <Check className="mr-1 h-4 w-4" />
+                            Mark as Returned
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => returnBookEarlyMutation.mutate(book.id)}
+                            disabled={returnBookEarlyMutation.isPending}
+                            className="w-full"
+                          >
+                            <Clock className="mr-1 h-4 w-4" />
+                            Return Early
+                          </Button>
+                        </div>
+                      )}
+                      {book.returned && (
+                        <Alert className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800">
+                          <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <AlertTitle className="text-green-800 dark:text-green-400">Marked as returned</AlertTitle>
+                          <AlertDescription className="text-green-700 dark:text-green-500 text-xs">
+                            Please ensure you return the physical book to the owner.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </CardFooter>
                   </Card>
                 ))}

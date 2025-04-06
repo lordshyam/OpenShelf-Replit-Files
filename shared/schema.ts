@@ -65,6 +65,7 @@ export const books = pgTable("books", {
   genre: text("genre").notNull(),
   imageUrl: text("image_url"),
   donated: boolean("donated").default(false),
+  unlisted: boolean("unlisted").default(false), // New field to hide a book from public view
 });
 
 export const borrowRequests = pgTable("borrowRequests", {
@@ -119,8 +120,10 @@ export const insertBookSchema = createInsertSchema(books).omit({
   borrowDeadline: true,
   returned: true,
   donated: true,
+  unlisted: true,
 }).extend({
   communityId: z.number().optional(),
+  unlisted: z.boolean().optional().default(false),
 });
 
 export const insertBorrowRequestSchema = createInsertSchema(borrowRequests).omit({

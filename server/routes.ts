@@ -533,7 +533,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Books
   app.get("/api/books", async (req, res) => {
-    const books = await storage.getBooks();
+    let books = await storage.getBooks();
+
+    // If communityId is provided, filter by it
+    if (req.query.communityId) {
+      const communityId = parseInt(req.query.communityId as string);
+      books = books.filter(book => book.communityId === communityId);
+    }
+
+    // Don't show books that are already borrowed
+    if (req.query.availableOnly === "true") {
+      books = books.filter(book => !book.borrowed);
+    }
+    
+    // Don't show unlisted books (except to the owner)
+    if (req.isAuthenticated() && req.user?.id) {
+      // For authenticated users, only hide unlisted books that they don't own
+      books = books.filter(book => !book.unlisted || book.ownerId === req.user!.id);
+    } else {
+      // For unauthenticated users, hide all unlisted books
+      books = books.filter(book => !book.unlisted);
+    }
+
     res.json(books);
   });
 
@@ -839,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Legacy account verification endpoint is already implemented in auth.ts
 
-  // Endpoint to mark a book as returned or not returned
+  // Endpoint for borrower to mark a book as returned (pending owner confirmation)
   app.post("/api/books/:id/return", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -880,6 +901,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
+    res.json(updatedBook);
+  });
+  
+  // Endpoint for owner to confirm return and complete the return process
+  app.post("/api/books/:id/confirm-return", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const bookId = parseInt(req.params.id);
+    const book = await storage.getBooks().then(books =>
+      books.find(b => b.id === bookId)
+    );
+
+    if (!book) return res.status(404).json({ message: "Book not found" });
+    if (!book.borrowed) return res.status(400).json({ message: "Book is not borrowed" });
+    if (book.ownerId !== req.user!.id) return res.status(403).json({ message: "This is not your book" });
+
+    // Get the borrower info for later use
+    const borrower = await storage.getUser(book.borrowerId!);
+    
+    // Complete the return process and reset the borrow status
+    const updatedBook = await storage.updateBook(bookId, {
+      borrowed: false,
+      borrowerId: undefined,
+      borrowDeadline: undefined,
+      returned: false // Reset returned flag
+    });
+
+    // Credit the borrower back for returning the book
+    if (borrower) {
+      const newCredits = borrower.credits + 1;
+      await storage.updateUserCredits(borrower.id, newCredits);
+      
+      // Send credit update notification
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'CREDIT_UPDATE',
+            userId: borrower.id,
+            credits: newCredits
+          }));
+        }
+      });
+    }
+
+    // Notify the borrower through chat
+    const chat = await storage.createChat({
+      senderId: req.user!.id,
+      receiverId: book.borrowerId!,
+      message: `I've confirmed that you returned "${book.title}". Thank you! Your credit has been returned to your account.`,
+      bookId,
+    });
+
+    // Broadcast the chat message
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          chat,
+          bookTitle: book.title
+        }));
+      }
+    });
+
+    res.json(updatedBook);
+  });
+  
+  // Endpoint for early return request
+  app.post("/api/books/:id/return-early", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const bookId = parseInt(req.params.id);
+    const book = await storage.getBooks().then(books =>
+      books.find(b => b.id === bookId)
+    );
+
+    if (!book) return res.status(404).json({ message: "Book not found" });
+    if (!book.borrowed) return res.status(400).json({ message: "Book is not borrowed" });
+    if (book.borrowerId !== req.user!.id) return res.status(403).json({ message: "This is not your borrowed book" });
+
+    // Mark the book as returned
+    const updatedBook = await storage.updateBook(bookId, {
+      returned: true
+    });
+
+    // Notify the owner through chat about early return
+    const chat = await storage.createChat({
+      senderId: req.user!.id,
+      receiverId: book.ownerId,
+      message: `I'd like to return "${book.title}" early. I've marked it as returned.`,
+      bookId,
+    });
+
+    // Broadcast the chat message
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          chat,
+          bookTitle: book.title
+        }));
+      }
+    });
+
+    res.json(updatedBook);
+  });
+  
+  // Toggle a book's unlisted status
+  app.post("/api/books/:id/toggle-visibility", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const bookId = parseInt(req.params.id);
+    const book = await storage.getBooks().then(books =>
+      books.find(b => b.id === bookId)
+    );
+    
+    if (!book) return res.status(404).json({ message: "Book not found" });
+    if (book.ownerId !== req.user!.id) return res.status(403).json({ message: "Not your book" });
+    
+    // If the book is borrowed, it cannot be unlisted
+    if (book.borrowed && !book.unlisted) {
+      return res.status(400).json({ 
+        message: "Cannot unlist a book that is currently borrowed" 
+      });
+    }
+    
+    // Toggle the visibility
+    const unlisted = !book.unlisted;
+    const updatedBook = await storage.updateBook(bookId, { unlisted });
+    
     res.json(updatedBook);
   });
 

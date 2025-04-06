@@ -28,7 +28,7 @@ export default function HomePage() {
     },
     enabled: !!user?.communityId,
     select: (books) => books.filter(book =>
-      !book.borrowed && !book.donated && (
+      !book.borrowed && !book.donated && !book.unlisted && (
         book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         book.author.toLowerCase().includes(searchQuery.toLowerCase())
       )
