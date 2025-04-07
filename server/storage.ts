@@ -7,7 +7,7 @@ import {
 } from "@shared/schema";
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { db } from "./db";
+import { db, pool, executeDbOperation } from "./db";
 import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
 import memorystore from "memorystore";
@@ -468,12 +468,44 @@ export class MemStorage implements IStorage {
 
 export class DbStorage implements IStorage {
   sessionStore: any;
+  private isDbConnected: boolean = false;
+  private connectionRetries: number = 0;
+  private maxRetries: number = 5;
   
   constructor() {
     // Initialize the session store
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
     });
+    
+    // Check database connection on startup
+    this.checkConnection();
+    
+    // Set up periodic connection health checks
+    setInterval(() => this.checkConnection(), 60000); // Check every minute
+  }
+  
+  private async checkConnection(): Promise<void> {
+    try {
+      const client = await pool.connect();
+      await client.query('SELECT 1');
+      client.release();
+      
+      if (!this.isDbConnected) {
+        console.log('Database connection established');
+        this.isDbConnected = true;
+        this.connectionRetries = 0;
+      }
+    } catch (error) {
+      this.isDbConnected = false;
+      this.connectionRetries++;
+      
+      console.error(`Database connection check failed (attempt ${this.connectionRetries}/${this.maxRetries}):`, error);
+      
+      if (this.connectionRetries >= this.maxRetries) {
+        console.error('Maximum database connection retries reached. Please check database configuration.');
+      }
+    }
   }
 
   async resetAllData(): Promise<void> {
@@ -509,13 +541,16 @@ export class DbStorage implements IStorage {
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    try {
-      const result = await db.select().from(schema.users).where(eq(schema.users.id, id));
-      return result[0];
-    } catch (error) {
+    return await executeDbOperation(
+      async () => {
+        const result = await db.select().from(schema.users).where(eq(schema.users.id, id));
+        return result[0];
+      },
+      `Error fetching user ${id}`
+    ).catch(error => {
       console.error(`Error fetching user ${id}:`, error);
       return undefined;
-    }
+    });
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -539,29 +574,29 @@ export class DbStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    try {
-      // Convert property names to snake_case for database columns
-      const dbUser: any = {
-        username: user.username,
-        email: user.email,
-        password: user.password,
-        credits: user.credits,
-        verified: user.verified,
-        verification_code: user.verificationCode,
-        avatar: user.avatar,
-        community_id: user.communityId,
-        state: user.state,
-        city: user.city,
-        location_verified: user.locationVerified,
-        preferences: user.preferences
-      };
-      
-      const result = await db.insert(schema.users).values(dbUser).returning();
-      return result[0];
-    } catch (error) {
-      console.error("Error creating user:", error);
-      throw error;
-    }
+    return await executeDbOperation(
+      async () => {
+        // Convert property names to snake_case for database columns
+        const dbUser: any = {
+          username: user.username,
+          email: user.email,
+          password: user.password,
+          credits: 0, // Default credits for new users
+          verified: user.verified || false,
+          verification_code: user.verificationCode || null,
+          avatar: user.avatar || getRandomAvatar(),
+          community_id: user.communityId || null,
+          state: user.state || null,
+          city: user.city || null,
+          location_verified: user.locationVerified || false,
+          preferences: user.preferences || null
+        };
+        
+        const result = await db.insert(schema.users).values(dbUser).returning();
+        return result[0];
+      },
+      "Error creating user"
+    );
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<void> {
