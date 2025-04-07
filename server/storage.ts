@@ -5,6 +5,9 @@ import {
   InsertCommunityJoinRequest, InsertCommunityChat, UserReport,
   InsertUserReport
 } from "@shared/schema";
+import * as schema from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
 import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
 import memorystore from "memorystore";
@@ -463,4 +466,531 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DbStorage implements IStorage {
+  sessionStore: any;
+  
+  constructor() {
+    // Initialize the session store
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
+  }
+
+  async resetAllData(): Promise<void> {
+    // This method is only implemented for compatibility with the IStorage interface
+    // In a production database, we don't want to accidentally delete all data
+    console.log("Reset all data is not supported in DbStorage as it would delete all database records");
+    
+    // For development purposes, provide information about database resets
+    if (process.env.NODE_ENV === 'development') {
+      console.log("To reset data in development, run the migration script with the '--reset' flag");
+    }
+  }
+
+  resetEverything(): void {
+    // This method is only implemented for compatibility with the IStorage interface
+    // In a production database, we don't want to accidentally delete all data
+    console.log("Reset everything is not supported in DbStorage as it would delete all database records");
+    
+    // For development purposes, provide a way to reset the database through a controlled method
+    if (process.env.NODE_ENV === 'development') {
+      console.log("If you need to reset the database in development, run the migration script again");
+    }
+  }
+
+  // User operations
+  async getUsers(): Promise<User[]> {
+    try {
+      return await db.select().from(schema.users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(schema.users).where(eq(schema.users.id, id));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching user ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(schema.users).where(eq(schema.users.username, username));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching user by username ${username}:`, error);
+      return undefined;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(schema.users).where(eq(schema.users.email, email));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching user by email ${email}:`, error);
+      return undefined;
+    }
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbUser: any = {
+        username: user.username,
+        email: user.email,
+        password: user.password,
+        credits: user.credits,
+        verified: user.verified,
+        verification_code: user.verificationCode,
+        avatar: user.avatar,
+        community_id: user.communityId,
+        state: user.state,
+        city: user.city,
+        location_verified: user.locationVerified,
+        preferences: user.preferences
+      };
+      
+      const result = await db.insert(schema.users).values(dbUser).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating user:", error);
+      throw error;
+    }
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<void> {
+    try {
+      // Convert camelCase properties to snake_case for database columns
+      const dbUpdates: any = {};
+      
+      if (updates.username !== undefined) dbUpdates.username = updates.username;
+      if (updates.email !== undefined) dbUpdates.email = updates.email;
+      if (updates.password !== undefined) dbUpdates.password = updates.password;
+      if (updates.credits !== undefined) dbUpdates.credits = updates.credits;
+      if (updates.verified !== undefined) dbUpdates.verified = updates.verified;
+      if (updates.verificationCode !== undefined) dbUpdates.verification_code = updates.verificationCode;
+      if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
+      if (updates.communityId !== undefined) dbUpdates.community_id = updates.communityId;
+      if (updates.state !== undefined) dbUpdates.state = updates.state;
+      if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.locationVerified !== undefined) dbUpdates.location_verified = updates.locationVerified;
+      if (updates.preferences !== undefined) dbUpdates.preferences = updates.preferences;
+      
+      await db.update(schema.users).set(dbUpdates).where(eq(schema.users.id, id));
+    } catch (error) {
+      console.error(`Error updating user ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async updateUserCredits(userId: number, credits: number): Promise<void> {
+    try {
+      await db.update(schema.users).set({ credits }).where(eq(schema.users.id, userId));
+    } catch (error) {
+      console.error(`Error updating credits for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  async updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void> {
+    try {
+      await db.update(schema.users).set({ preferences }).where(eq(schema.users.id, userId));
+    } catch (error) {
+      console.error(`Error updating preferences for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    try {
+      await db.delete(schema.users).where(eq(schema.users.id, id));
+    } catch (error) {
+      console.error(`Error deleting user ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // User reports
+  async getUserReports(): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports);
+    } catch (error) {
+      console.error("Error fetching user reports:", error);
+      return [];
+    }
+  }
+
+  async getUserReportsByReporter(reporterId: number): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports).where(eq(schema.userReports.reporterId, reporterId));
+    } catch (error) {
+      console.error(`Error fetching reports by reporter ${reporterId}:`, error);
+      return [];
+    }
+  }
+
+  async getUserReportsByReported(reportedUserId: number): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports).where(eq(schema.userReports.reportedUserId, reportedUserId));
+    } catch (error) {
+      console.error(`Error fetching reports for reported user ${reportedUserId}:`, error);
+      return [];
+    }
+  }
+
+  async createUserReport(report: InsertUserReport): Promise<UserReport> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbReport: any = {
+        reporter_id: report.reporterId,
+        reported_user_id: report.reportedUserId,
+        report_type: report.reportType,
+        description: report.description,
+        book_id: report.bookId,
+        chat_id: report.chatId,
+        status: report.status || 'pending',
+        created_at: report.createdAt || new Date()
+      };
+      
+      const result = await db.insert(schema.userReports).values(dbReport).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating user report:", error);
+      throw error;
+    }
+  }
+
+  async updateUserReportStatus(id: number, status: string): Promise<void> {
+    try {
+      // Convert camelCase properties to snake_case for database columns
+      const dbUpdates: any = { 
+        status,
+        resolved_at: status !== 'pending' ? new Date() : undefined
+      };
+      
+      await db.update(schema.userReports).set(dbUpdates).where(eq(schema.userReports.id, id));
+    } catch (error) {
+      console.error(`Error updating report status ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Book operations
+  async getBooks(): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books);
+    } catch (error) {
+      console.error("Error fetching books:", error);
+      return [];
+    }
+  }
+
+  async getBooksByOwner(ownerId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.ownerId, ownerId));
+    } catch (error) {
+      console.error(`Error fetching books by owner ${ownerId}:`, error);
+      return [];
+    }
+  }
+
+  async getBooksByBorrower(borrowerId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.borrowerId, borrowerId));
+    } catch (error) {
+      console.error(`Error fetching books by borrower ${borrowerId}:`, error);
+      return [];
+    }
+  }
+
+  async getBooksByCommunity(communityId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching books by community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createBook(book: InsertBook): Promise<Book> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbBook: any = {
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        google_books_id: book.googleBooksId,
+        owner_id: book.ownerId,
+        community_id: book.communityId,
+        condition: book.condition,
+        genre: book.genre,
+        image_url: book.imageUrl,
+        unlisted: book.unlisted
+      };
+      
+      const result = await db.insert(schema.books).values(dbBook).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating book:", error);
+      throw error;
+    }
+  }
+
+  async updateBook(id: number, updates: Partial<Book>): Promise<Book> {
+    try {
+      // Convert camelCase properties to snake_case for database columns
+      const dbUpdates: any = {};
+      
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.author !== undefined) dbUpdates.author = updates.author;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.googleBooksId !== undefined) dbUpdates.google_books_id = updates.googleBooksId;
+      if (updates.ownerId !== undefined) dbUpdates.owner_id = updates.ownerId;
+      if (updates.communityId !== undefined) dbUpdates.community_id = updates.communityId;
+      if (updates.borrowed !== undefined) dbUpdates.borrowed = updates.borrowed;
+      if (updates.borrowerId !== undefined) dbUpdates.borrower_id = updates.borrowerId;
+      if (updates.borrowDeadline !== undefined) dbUpdates.borrow_deadline = updates.borrowDeadline;
+      if (updates.returned !== undefined) dbUpdates.returned = updates.returned;
+      if (updates.condition !== undefined) dbUpdates.condition = updates.condition;
+      if (updates.genre !== undefined) dbUpdates.genre = updates.genre;
+      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+      if (updates.donated !== undefined) dbUpdates.donated = updates.donated;
+      if (updates.unlisted !== undefined) dbUpdates.unlisted = updates.unlisted;
+      
+      const result = await db.update(schema.books).set(dbUpdates).where(eq(schema.books.id, id)).returning();
+      return result[0];
+    } catch (error) {
+      console.error(`Error updating book ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteBook(id: number): Promise<void> {
+    try {
+      await db.delete(schema.books).where(eq(schema.books.id, id));
+    } catch (error) {
+      console.error(`Error deleting book ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Community operations
+  async getCommunities(): Promise<Community[]> {
+    try {
+      return await db.select().from(schema.communities);
+    } catch (error) {
+      console.error("Error fetching communities:", error);
+      return [];
+    }
+  }
+
+  async getCommunity(id: number): Promise<Community | undefined> {
+    try {
+      const result = await db.select().from(schema.communities).where(eq(schema.communities.id, id));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching community ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createCommunity(community: InsertCommunity): Promise<Community> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbCommunity: any = {
+        name: community.name,
+        description: community.description,
+        location: community.location,
+        state: community.state,
+        city: community.city,
+        image_url: community.imageUrl,
+        is_public: community.isPublic,
+        created_at: community.createdAt || new Date(),
+        created_by: community.createdBy
+      };
+      
+      const result = await db.insert(schema.communities).values(dbCommunity).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating community:", error);
+      throw error;
+    }
+  }
+
+  async updateCommunity(id: number, updates: Partial<Community>): Promise<void> {
+    try {
+      // Convert camelCase properties to snake_case for database columns
+      const dbUpdates: any = {};
+      
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.location !== undefined) dbUpdates.location = updates.location;
+      if (updates.state !== undefined) dbUpdates.state = updates.state;
+      if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
+      if (updates.createdAt !== undefined) dbUpdates.created_at = updates.createdAt;
+      if (updates.createdBy !== undefined) dbUpdates.created_by = updates.createdBy;
+      
+      await db.update(schema.communities).set(dbUpdates).where(eq(schema.communities.id, id));
+    } catch (error) {
+      console.error(`Error updating community ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async getCommunityMembers(communityId: number): Promise<User[]> {
+    try {
+      return await db.select().from(schema.users).where(eq(schema.users.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching community members for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  // Community join requests
+  async getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]> {
+    try {
+      return await db.select().from(schema.communityJoinRequests).where(eq(schema.communityJoinRequests.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching join requests for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbRequest: any = {
+        user_id: request.userId,
+        community_id: request.communityId,
+        status: request.status || 'pending',
+        created_at: request.createdAt || new Date()
+      };
+      
+      const result = await db.insert(schema.communityJoinRequests).values(dbRequest).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating join request:", error);
+      throw error;
+    }
+  }
+
+  async updateJoinRequest(id: number, status: string): Promise<void> {
+    try {
+      await db.update(schema.communityJoinRequests).set({ status }).where(eq(schema.communityJoinRequests.id, id));
+    } catch (error) {
+      console.error(`Error updating join request ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Community chat
+  async getCommunityChats(communityId: number): Promise<CommunityChat[]> {
+    try {
+      return await db.select().from(schema.communityChats).where(eq(schema.communityChats.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching chats for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbChat: any = {
+        community_id: chat.communityId,
+        user_id: chat.userId,
+        message: chat.message,
+        timestamp: chat.timestamp || new Date()
+      };
+      
+      const result = await db.insert(schema.communityChats).values(dbChat).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating community chat:", error);
+      throw error;
+    }
+  }
+
+  // Borrow requests
+  async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
+    try {
+      return await db.select().from(schema.borrowRequests).where(eq(schema.borrowRequests.requesterId, userId));
+    } catch (error) {
+      console.error(`Error fetching borrow requests for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbRequest: any = {
+        book_id: request.bookId,
+        requester_id: request.requesterId,
+        status: request.status || 'pending',
+        created_at: request.createdAt || new Date(),
+        requested_return_date: request.requestedReturnDate
+      };
+      
+      const result = await db.insert(schema.borrowRequests).values(dbRequest).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating borrow request:", error);
+      throw error;
+    }
+  }
+
+  async updateBorrowRequest(id: number, status: string): Promise<void> {
+    try {
+      await db.update(schema.borrowRequests).set({ status }).where(eq(schema.borrowRequests.id, id));
+    } catch (error) {
+      console.error(`Error updating borrow request ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Chat operations
+  async getChats(userId: number): Promise<Chat[]> {
+    try {
+      // Get chats where the user is either the sender or receiver
+      const sentChats = await db.select().from(schema.chats).where(eq(schema.chats.senderId, userId));
+      const receivedChats = await db.select().from(schema.chats).where(eq(schema.chats.receiverId, userId));
+      return [...sentChats, ...receivedChats];
+    } catch (error) {
+      console.error(`Error fetching chats for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  async createChat(chat: InsertChat): Promise<Chat> {
+    try {
+      // Convert property names to snake_case for database columns
+      const dbChat: any = {
+        sender_id: chat.senderId,
+        receiver_id: chat.receiverId,
+        message: chat.message,
+        timestamp: chat.timestamp || new Date(),
+        book_id: chat.bookId
+      };
+      
+      const result = await db.insert(schema.chats).values(dbChat).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating chat:", error);
+      throw error;
+    }
+  }
+
+  // No need for getter as sessionStore is already public
+}
+
+// Use DbStorage for persistent storage
+export const storage = new DbStorage();
