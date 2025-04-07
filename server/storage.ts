@@ -1059,5 +1059,5 @@ export class DbStorage implements IStorage {
   // No need for getter as sessionStore is already public
 }
 
-// Use DbStorage for persistent storage
-export const storage = new DbStorage();
+// Use MemStorage for in-memory storage
+export const storage = new MemStorage();
