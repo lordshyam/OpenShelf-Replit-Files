@@ -582,7 +582,12 @@ export class DbStorage implements IStorage {
       if (updates.locationVerified !== undefined) dbUpdates.location_verified = updates.locationVerified;
       if (updates.preferences !== undefined) dbUpdates.preferences = updates.preferences;
       
-      await db.update(schema.users).set(dbUpdates).where(eq(schema.users.id, id));
+      // Only update if there are changes to make
+      if (Object.keys(dbUpdates).length > 0) {
+        await db.update(schema.users)
+          .set(dbUpdates)
+          .where(eq(schema.users.id, id));
+      }
     } catch (error) {
       console.error(`Error updating user ${id}:`, error);
       throw error;
@@ -591,7 +596,9 @@ export class DbStorage implements IStorage {
 
   async updateUserCredits(userId: number, credits: number): Promise<void> {
     try {
-      await db.update(schema.users).set({ credits }).where(eq(schema.users.id, userId));
+      await db.update(schema.users)
+        .set({ credits })
+        .where(eq(schema.users.id, userId));
     } catch (error) {
       console.error(`Error updating credits for user ${userId}:`, error);
       throw error;
@@ -600,7 +607,9 @@ export class DbStorage implements IStorage {
 
   async updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void> {
     try {
-      await db.update(schema.users).set({ preferences }).where(eq(schema.users.id, userId));
+      await db.update(schema.users)
+        .set({ preferences })
+        .where(eq(schema.users.id, userId));
     } catch (error) {
       console.error(`Error updating preferences for user ${userId}:`, error);
       throw error;
@@ -609,7 +618,8 @@ export class DbStorage implements IStorage {
 
   async deleteUser(id: number): Promise<void> {
     try {
-      await db.delete(schema.users).where(eq(schema.users.id, id));
+      await db.delete(schema.users)
+        .where(eq(schema.users.id, id));
     } catch (error) {
       console.error(`Error deleting user ${id}:`, error);
       throw error;
@@ -674,7 +684,9 @@ export class DbStorage implements IStorage {
         resolved_at: status !== 'pending' ? new Date() : undefined
       };
       
-      await db.update(schema.userReports).set(dbUpdates).where(eq(schema.userReports.id, id));
+      await db.update(schema.userReports)
+        .set(dbUpdates)
+        .where(eq(schema.userReports.id, id));
     } catch (error) {
       console.error(`Error updating report status ${id}:`, error);
       throw error;
@@ -773,7 +785,8 @@ export class DbStorage implements IStorage {
 
   async deleteBook(id: number): Promise<void> {
     try {
-      await db.delete(schema.books).where(eq(schema.books.id, id));
+      await db.delete(schema.books)
+        .where(eq(schema.books.id, id));
     } catch (error) {
       console.error(`Error deleting book ${id}:`, error);
       throw error;
@@ -838,7 +851,12 @@ export class DbStorage implements IStorage {
       if (updates.createdAt !== undefined) dbUpdates.created_at = updates.createdAt;
       if (updates.createdBy !== undefined) dbUpdates.created_by = updates.createdBy;
       
-      await db.update(schema.communities).set(dbUpdates).where(eq(schema.communities.id, id));
+      // Only update if there are changes to make
+      if (Object.keys(dbUpdates).length > 0) {
+        await db.update(schema.communities)
+          .set(dbUpdates)
+          .where(eq(schema.communities.id, id));
+      }
     } catch (error) {
       console.error(`Error updating community ${id}:`, error);
       throw error;
@@ -884,7 +902,9 @@ export class DbStorage implements IStorage {
 
   async updateJoinRequest(id: number, status: string): Promise<void> {
     try {
-      await db.update(schema.communityJoinRequests).set({ status }).where(eq(schema.communityJoinRequests.id, id));
+      await db.update(schema.communityJoinRequests)
+        .set({ status })
+        .where(eq(schema.communityJoinRequests.id, id));
     } catch (error) {
       console.error(`Error updating join request ${id}:`, error);
       throw error;
@@ -950,7 +970,9 @@ export class DbStorage implements IStorage {
 
   async updateBorrowRequest(id: number, status: string): Promise<void> {
     try {
-      await db.update(schema.borrowRequests).set({ status }).where(eq(schema.borrowRequests.id, id));
+      await db.update(schema.borrowRequests)
+        .set({ status })
+        .where(eq(schema.borrowRequests.id, id));
     } catch (error) {
       console.error(`Error updating borrow request ${id}:`, error);
       throw error;
