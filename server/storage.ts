@@ -850,8 +850,10 @@ export class DbStorage implements IStorage {
 
   async createCommunity(community: InsertCommunity): Promise<Community> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbCommunity: any = {
+      console.log("Creating community:", community);
+      
+      // CRITICAL FIX: Drizzle expects an array of values
+      const result = await db.insert(schema.communities).values({
         name: community.name,
         description: community.description,
         location: community.location,
@@ -859,15 +861,15 @@ export class DbStorage implements IStorage {
         city: community.city,
         image_url: community.imageUrl,
         is_public: community.isPublic,
-        created_at: community.createdAt || new Date(),
         created_by: community.createdBy
-      };
+        // created_at is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.communities).values(dbCommunity).returning();
+      console.log("Community created successfully:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating community:", error);
-      throw error;
+      throw new Error(`Failed to create community: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -919,19 +921,21 @@ export class DbStorage implements IStorage {
 
   async createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbRequest: any = {
+      console.log("Creating join request:", request);
+      
+      // CRITICAL FIX: Pass values directly to Drizzle
+      const result = await db.insert(schema.communityJoinRequests).values({
         user_id: request.userId,
         community_id: request.communityId,
-        status: request.status || 'pending',
-        created_at: request.createdAt || new Date()
-      };
+        status: 'pending' // Status is set by the database default
+        // created_at is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.communityJoinRequests).values(dbRequest).returning();
+      console.log("Join request created successfully:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating join request:", error);
-      throw error;
+      throw new Error(`Failed to create join request: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -958,19 +962,21 @@ export class DbStorage implements IStorage {
 
   async createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbChat: any = {
+      console.log("Creating community chat:", chat);
+      
+      // CRITICAL FIX: Pass values directly to Drizzle - we need to use snakeCase names
+      const result = await db.insert(schema.communityChats).values({
         community_id: chat.communityId,
         user_id: chat.userId,
-        message: chat.message,
-        timestamp: chat.timestamp || new Date()
-      };
+        message: chat.message
+        // timestamp is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.communityChats).values(dbChat).returning();
+      console.log("Community chat created successfully:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating community chat:", error);
-      throw error;
+      throw new Error(`Failed to create community chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -986,20 +992,22 @@ export class DbStorage implements IStorage {
 
   async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbRequest: any = {
+      console.log("Creating borrow request:", request);
+      
+      // CRITICAL FIX: Pass values directly to Drizzle using the proper format
+      const result = await db.insert(schema.borrowRequests).values({
         book_id: request.bookId,
         requester_id: request.requesterId,
-        status: request.status || 'pending',
-        created_at: request.createdAt || new Date(),
+        status: 'pending', // Default status
         requested_return_date: request.requestedReturnDate
-      };
+        // created_at is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.borrowRequests).values(dbRequest).returning();
+      console.log("Borrow request created successfully:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating borrow request:", error);
-      throw error;
+      throw new Error(`Failed to create borrow request: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1029,20 +1037,22 @@ export class DbStorage implements IStorage {
 
   async createChat(chat: InsertChat): Promise<Chat> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbChat: any = {
+      console.log("Creating chat:", chat);
+      
+      // CRITICAL FIX: Pass values directly to Drizzle using the proper format
+      const result = await db.insert(schema.chats).values({
         sender_id: chat.senderId,
         receiver_id: chat.receiverId,
         message: chat.message,
-        timestamp: chat.timestamp || new Date(),
         book_id: chat.bookId
-      };
+        // timestamp is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.chats).values(dbChat).returning();
+      console.log("Chat created successfully:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating chat:", error);
-      throw error;
+      throw new Error(`Failed to create chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
