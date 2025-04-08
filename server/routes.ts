@@ -575,7 +575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Books
   app.get("/api/books", async (req, res) => {
     let books = await storage.getBooks();
-    let bookOwners: Map<number, typeof User> = new Map();
+    let bookOwners: Map<number, User> = new Map();
     
     // If communityId is provided, filter by it
     if (req.query.communityId) {
@@ -663,8 +663,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check for duplicate books
       const existingBooks = await storage.getBooks();
+      
+      // Check for duplicates - consider only non-unlisted books
       const isDuplicate = existingBooks.some(book =>
         book.ownerId === req.user!.id &&
+        !book.unlisted && // Make sure we only check active (non-unlisted) books
         book.title.toLowerCase() === result.data.title.toLowerCase() &&
         book.author.toLowerCase() === result.data.author.toLowerCase()
       );
@@ -696,7 +699,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found after book creation" });
       }
       
-      const creditsToAdd = 0.5; // Fixed 0.5 credits per book
+      // We need to use integers for credits, so we'll use 1 credit instead of 0.5
+      const creditsToAdd = 1; // Use 1 credit instead of 0.5 to avoid decimal issues
       const newCreditBalance = updatedUser.credits + creditsToAdd;
 
       // Update user's credits
