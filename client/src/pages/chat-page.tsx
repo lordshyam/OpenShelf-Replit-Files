@@ -574,13 +574,13 @@ export default function ChatPage() {
                                   <CardFooter>
                                     <Button
                                       className="w-full"
-                                      disabled={formatCredits(user?.credits ?? 0) < 0.5 || book.ownerId === user?.id || book.borrowed === true}
+                                      disabled={formatCredits(user?.credits ?? 0) < 1 || book.ownerId === user?.id || book.borrowed === true}
                                       onClick={() => {
                                         const userCredits = formatCredits(user?.credits ?? 0);
-                                        if (userCredits < 0.5) {
+                                        if (userCredits < 1) {
                                           toast({
                                             title: "Insufficient credits",
-                                            description: "You need 0.5 credits to borrow a book. List your books to earn credits!",
+                                            description: "You need 1 credit to borrow a book. List your books to earn credits!",
                                             variant: "destructive",
                                           });
                                           return;

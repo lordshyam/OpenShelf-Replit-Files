@@ -163,8 +163,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               break;
             
             case 'COMMUNITY_CHAT_CONFIRMED':
-              console.log('Community chat message confirmed:', data.chat.id);
-              // No need to do anything here since server already broadcasts to everyone
+              console.log('Community chat message confirmed:', data.chatId);
+              // Add our own message to the community chat list
+              if (user) {
+                const confirmChat = {
+                  id: data.chatId,
+                  userId: user.id,
+                  communityId: user.communityId!,
+                  message: data.message || "",
+                  timestamp: new Date()
+                };
+                
+                queryClient.setQueryData(["/api/community-chats", user.communityId], 
+                  (oldChats: CommunityChat[] | undefined) => {
+                    if (!oldChats) return [confirmChat];
+                    return [...oldChats, confirmChat];
+                  }
+                );
+              }
               break;
             
             case 'CHAT_MESSAGE_CONFIRMED':

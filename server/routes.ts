@@ -72,15 +72,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log('Community chat message saved:', chat.id);
 
-            // Send confirmation to the sender first
+            // Send confirmation to the sender
             ws.send(JSON.stringify({
               type: 'COMMUNITY_CHAT_CONFIRMED',
-              chat
+              chatId: chat.id,
+              message: message.message
             }));
             
-            // Broadcast the message to all clients
+            // Broadcast the message to all clients except the sender
             wss.clients.forEach((client) => {
-              if (client.readyState === WebSocket.OPEN) {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                   type: 'COMMUNITY_CHAT',
                   chat,
@@ -779,7 +780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!book) return res.status(404).send("Book not found");
     if (book.borrowed) return res.status(400).send("Book already borrowed");
-    if (req.user!.credits < 1) return res.status(400).send("Insufficient credits. You need 0.5 credits to borrow a book.");
+    if (req.user!.credits < 1) return res.status(400).send("Insufficient credits. You need 1 credit to borrow a book.");
     
     // Check if user has any unreturned books
     const borrowedBooks = await storage.getBooksByBorrower(req.user!.id);
