@@ -649,91 +649,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/books", async (req, res) => {
-    // Check authentication first
-    if (!req.isAuthenticated()) {
-      console.log('User not authenticated:', req.user);
-      return res.status(401).json({ message: "Please login to list books" });
-    }
-
-    const result = insertBookSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json(result.error);
-    }
-
-    // Check for duplicate books
-    const existingBooks = await storage.getBooks();
-    const isDuplicate = existingBooks.some(book =>
-      book.ownerId === req.user!.id &&
-      book.title.toLowerCase() === result.data.title.toLowerCase() &&
-      book.author.toLowerCase() === result.data.author.toLowerCase()
-    );
-
-    if (isDuplicate) {
-      return res.status(400).json({ message: "You have already listed this book" });
-    }
-
-    // Get user to check community membership
-    const user = await storage.getUser(req.user!.id);
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    if (!user.communityId) {
-      return res.status(400).json({ message: "Please join a community before adding books" });
-    }
-    
-    const book = await storage.createBook({
-      ...result.data,
-      ownerId: req.user!.id,
-      communityId: user.communityId,
-    });
-
-    // Get current user's books count after adding new book
-    const userBooks = await storage.getBooksByOwner(req.user!.id);
-    const creditsToAdd = 0.5; // Fixed 0.5 credits per book
-
-    // Update user's credits
-    await storage.updateUserCredits(req.user!.id, req.user!.credits + creditsToAdd);
-
-    // Broadcast credit update through WebSocket
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({
-          type: 'CREDIT_UPDATE',
-          userId: req.user!.id,
-          credits: req.user!.credits + creditsToAdd
-        }));
+    try {
+      // Check authentication first
+      if (!req.isAuthenticated()) {
+        console.log('User not authenticated:', req.user);
+        return res.status(401).json({ message: "Please login to list books" });
       }
-    });
-    
-    // Get community info
-    const community = await storage.getCommunity(user.communityId!);
-    
-    if (community) {
-      // Create a notification message in the community chat
-      const bookInfoMessage = `${user.username} has listed a new book: "${book.title}" by ${book.author}. ${book.description ? `Description: ${book.description}` : ''} ${book.condition ? `Condition: ${book.condition}` : ''}`;
+
+      const result = insertBookSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json(result.error);
+      }
+
+      // Check for duplicate books
+      const existingBooks = await storage.getBooks();
+      const isDuplicate = existingBooks.some(book =>
+        book.ownerId === req.user!.id &&
+        book.title.toLowerCase() === result.data.title.toLowerCase() &&
+        book.author.toLowerCase() === result.data.author.toLowerCase()
+      );
+
+      if (isDuplicate) {
+        return res.status(400).json({ message: "You have already listed this book" });
+      }
+
+      // Get user to check community membership
+      const user = await storage.getUser(req.user!.id);
       
-      const communityChat = await storage.createCommunityChat({
-        communityId: user.communityId!,
-        userId: 0, // System message (OpenShelf)
-        message: bookInfoMessage
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      if (!user.communityId) {
+        return res.status(400).json({ message: "Please join a community before adding books" });
+      }
+      
+      const book = await storage.createBook({
+        ...result.data,
+        ownerId: req.user!.id,
+        communityId: user.communityId,
       });
+
+      // Get the latest user data to ensure we have the current credits
+      const updatedUser = await storage.getUser(req.user!.id);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found after book creation" });
+      }
       
-      // Broadcast the community message about the new book
+      const creditsToAdd = 0.5; // Fixed 0.5 credits per book
+      const newCreditBalance = updatedUser.credits + creditsToAdd;
+
+      // Update user's credits
+      await storage.updateUserCredits(updatedUser.id, newCreditBalance);
+
+      // Update the session user info with new credit balance
+      if (req.user) {
+        req.user.credits = newCreditBalance;
+      }
+
+      // Broadcast credit update through WebSocket
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify({
-            type: 'COMMUNITY_CHAT',
-            chat: communityChat,
-            communityName: community.name,
-            book: book // Include the full book data
+            type: 'CREDIT_UPDATE',
+            userId: updatedUser.id,
+            credits: newCreditBalance
           }));
         }
       });
-    }
+      
+      try {
+        // Get community info
+        const community = await storage.getCommunity(user.communityId!);
+        
+        if (community) {
+          // Create a notification message in the community chat
+          const bookInfoMessage = `${user.username} has listed a new book: "${book.title}" by ${book.author}. ${book.description ? `Description: ${book.description}` : ''} ${book.condition ? `Condition: ${book.condition}` : ''}`;
+          
+          const communityChat = await storage.createCommunityChat({
+            communityId: user.communityId!,
+            userId: 0, // System message (OpenShelf)
+            message: bookInfoMessage
+          });
+          
+          // Broadcast the community message about the new book
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'COMMUNITY_CHAT',
+                chat: communityChat,
+                communityName: community.name,
+                book: book // Include the full book data
+              }));
+            }
+          });
+        }
+      } catch (chatError) {
+        // Log the error but don't let it prevent the response
+        console.error("Error sending community notification:", chatError);
+        // Still allow the book creation to succeed
+      }
 
-    res.status(201).json(book);
+      res.status(201).json(book);
+    } catch (error) {
+      console.error("Error creating book:", error);
+      res.status(500).json({ message: "An error occurred while creating the book" });
+    }
   });
 
   // Borrow requests
