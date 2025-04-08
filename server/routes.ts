@@ -699,8 +699,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found after book creation" });
       }
       
-      // We need to use integers for credits, so we'll use 1 credit instead of 0.5
-      const creditsToAdd = 1; // Use 1 credit instead of 0.5 to avoid decimal issues
+      // We need to work with integers for database compatibility
+      // Store credits as integers internally (1 = 0.5 credits in display)
+      const creditsToAdd = 1; // This represents 0.5 credits to the user
       const newCreditBalance = updatedUser.credits + creditsToAdd;
 
       // Update user's credits
@@ -1144,6 +1145,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Toggle the visibility
     const unlisted = !book.unlisted;
     const updatedBook = await storage.updateBook(bookId, { unlisted });
+    
+    // Update the user's credits based on unlisted status
+    try {
+      // Get latest user data to ensure we have current credits
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        console.error("User not found when toggling book visibility");
+      } else {
+        // If book is now unlisted, deduct credit (user hid the book)
+        // If book is now visible again, add credit back (user relisted the book)
+        // Using 1 as the credits delta (represents 0.5 credits to the user)
+        const creditsDelta = unlisted ? -1 : 1;
+        const newCreditBalance = user.credits + creditsDelta;
+        
+        // Update user's credits
+        await storage.updateUserCredits(user.id, newCreditBalance);
+        
+        // Update session
+        if (req.user) {
+          req.user.credits = newCreditBalance;
+        }
+        
+        // Broadcast credit update through WebSocket
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              type: 'CREDIT_UPDATE',
+              userId: user.id,
+              credits: newCreditBalance
+            }));
+          }
+        });
+        
+        // Add a notification in community chat
+        const action = unlisted ? "unlisted" : "relisted";
+        const creditsAction = unlisted ? "lost" : "gained back";
+        const communityChat = await storage.createCommunityChat({
+          communityId: user.communityId!,
+          userId: 0, // System message
+          message: `${user.username} has ${action} their book "${book.title}" and ${creditsAction} 0.5 credits.`
+        });
+        
+        // Get community for notification
+        const community = await storage.getCommunity(user.communityId!);
+        if (community) {
+          // Broadcast the community message
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'COMMUNITY_CHAT',
+                chat: communityChat,
+                communityName: community.name
+              }));
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error updating credits when toggling book visibility:", error);
+      // We still return the updated book even if credit update fails
+    }
     
     res.json(updatedBook);
   });
