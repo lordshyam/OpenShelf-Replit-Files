@@ -4,6 +4,7 @@ import { Button } from "./button";
 import { Avatar, AvatarImage, AvatarFallback } from "./avatar";
 import { HomeIcon, BookOpen, MessageSquare, Settings, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { formatCredits } from "@/lib/format-credits";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -68,7 +69,7 @@ export default function Navbar() {
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <span className="text-sm text-muted-foreground">Credits:</span>
-            <span className="font-medium">{user.credits}</span>
+            <span className="font-medium">{formatCredits(user.credits).toFixed(1)}</span>
           </div>
 
           <Avatar>

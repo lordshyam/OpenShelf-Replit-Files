@@ -14,6 +14,7 @@ import { BookImage } from "@/components/book-image";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { formatCredits } from "@/lib/format-credits";
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -180,7 +181,7 @@ export default function HomePage() {
               <div className="text-center">
                 <BookOpen className="h-8 w-8 mx-auto mb-2" />
                 <h3 className="font-semibold">Borrow Books</h3>
-                <p className="text-sm">Use 1 credit</p>
+                <p className="text-sm">Use 0.5 credits</p>
               </div>
               <div className="text-center">
                 <UserCheck className="h-8 w-8 mx-auto mb-2" />
@@ -247,13 +248,13 @@ export default function HomePage() {
               <CardFooter>
                 <Button
                   className="w-full"
-                  disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || borrowBookMutation.isPending}
+                  disabled={formatCredits(user?.credits ?? 0) < 0.5 || book.ownerId === user?.id || borrowBookMutation.isPending}
                   onClick={() => {
-                    const userCredits = user?.credits ?? 0;
-                    if (userCredits < 1) {
+                    const userCredits = formatCredits(user?.credits ?? 0);
+                    if (userCredits < 0.5) {
                       toast({
                         title: "Insufficient credits",
-                        description: "You need 1 credit to borrow a book. List your books to earn credits!",
+                        description: "You need 0.5 credits to borrow a book. List your books to earn credits!",
                         variant: "destructive",
                       });
                       return;

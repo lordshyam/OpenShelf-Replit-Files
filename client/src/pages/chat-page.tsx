@@ -16,6 +16,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { BookImage } from "@/components/book-image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserReportDialog } from "@/components/user-report-dialog";
+import { formatCredits } from "@/lib/format-credits";
 
 type ChatRoom = {
   userId: number;
@@ -573,13 +574,13 @@ export default function ChatPage() {
                                   <CardFooter>
                                     <Button
                                       className="w-full"
-                                      disabled={(user?.credits ?? 0) < 1 || book.ownerId === user?.id || book.borrowed === true}
+                                      disabled={formatCredits(user?.credits ?? 0) < 0.5 || book.ownerId === user?.id || book.borrowed === true}
                                       onClick={() => {
-                                        const userCredits = user?.credits ?? 0;
-                                        if (userCredits < 1) {
+                                        const userCredits = formatCredits(user?.credits ?? 0);
+                                        if (userCredits < 0.5) {
                                           toast({
                                             title: "Insufficient credits",
-                                            description: "You need 1 credit to borrow a book. List your books to earn credits!",
+                                            description: "You need 0.5 credits to borrow a book. List your books to earn credits!",
                                             variant: "destructive",
                                           });
                                           return;

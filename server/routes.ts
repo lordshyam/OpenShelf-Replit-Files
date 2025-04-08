@@ -779,7 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!book) return res.status(404).send("Book not found");
     if (book.borrowed) return res.status(400).send("Book already borrowed");
-    if (req.user!.credits < 1) return res.status(400).send("Insufficient credits");
+    if (req.user!.credits < 1) return res.status(400).send("Insufficient credits. You need 0.5 credits to borrow a book.");
     
     // Check if user has any unreturned books
     const borrowedBooks = await storage.getBooksByBorrower(req.user!.id);
@@ -869,6 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Deduct credits from borrower and broadcast update
     const borrower = await storage.getUser(request.requesterId);
     if (borrower) {
+      // Deduct 0.5 credits (internal value: 1)
       const newCredits = borrower.credits - 1;
       await storage.updateUserCredits(borrower.id, newCredits);
 
@@ -1046,6 +1047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Credit the borrower back for returning the book
     if (borrower) {
+      // Return 0.5 credits (internal value: 1)
       const newCredits = borrower.credits + 1;
       await storage.updateUserCredits(borrower.id, newCredits);
       
@@ -1065,7 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const chat = await storage.createChat({
       senderId: req.user!.id,
       receiverId: book.borrowerId!,
-      message: `I've confirmed that you returned "${book.title}". Thank you! Your credit has been returned to your account.`,
+      message: `I've confirmed that you returned "${book.title}". Thank you! Your 0.5 credit has been returned to your account.`,
       bookId,
     });
 
