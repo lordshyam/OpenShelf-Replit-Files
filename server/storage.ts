@@ -576,23 +576,21 @@ export class DbStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     return await executeDbOperation(
       async () => {
-        // Convert property names to snake_case for database columns
-        const dbUser: any = {
+        // Fix: Only include properties defined in the insertUserSchema
+        // The schema only includes: username, email, password, verified, verificationCode
+        const result = await db.insert(schema.users).values({
           username: user.username,
           email: user.email,
           password: user.password,
-          credits: 0, // Default credits for new users
           verified: user.verified || false,
-          verification_code: user.verificationCode || null,
-          avatar: user.avatar || getRandomAvatar(),
-          community_id: user.communityId || null,
-          state: user.state || null,
-          city: user.city || null,
-          location_verified: user.locationVerified || false,
-          preferences: user.preferences || null
-        };
+          verificationCode: user.verificationCode || null,
+          
+          // Set other default fields not in the InsertUser schema
+          credits: 0,
+          avatar: getRandomAvatar(),
+          // Don't set other fields, let them default to NULL
+        }).returning();
         
-        const result = await db.insert(schema.users).values(dbUser).returning();
         return result[0];
       },
       "Error creating user"
@@ -601,20 +599,20 @@ export class DbStorage implements IStorage {
 
   async updateUser(id: number, updates: Partial<User>): Promise<void> {
     try {
-      // Convert camelCase properties to snake_case for database columns
-      const dbUpdates: any = {};
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<User> = {};
       
       if (updates.username !== undefined) dbUpdates.username = updates.username;
       if (updates.email !== undefined) dbUpdates.email = updates.email;
       if (updates.password !== undefined) dbUpdates.password = updates.password;
       if (updates.credits !== undefined) dbUpdates.credits = updates.credits;
       if (updates.verified !== undefined) dbUpdates.verified = updates.verified;
-      if (updates.verificationCode !== undefined) dbUpdates.verification_code = updates.verificationCode;
+      if (updates.verificationCode !== undefined) dbUpdates.verificationCode = updates.verificationCode;
       if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
-      if (updates.communityId !== undefined) dbUpdates.community_id = updates.communityId;
+      if (updates.communityId !== undefined) dbUpdates.communityId = updates.communityId;
       if (updates.state !== undefined) dbUpdates.state = updates.state;
       if (updates.city !== undefined) dbUpdates.city = updates.city;
-      if (updates.locationVerified !== undefined) dbUpdates.location_verified = updates.locationVerified;
+      if (updates.locationVerified !== undefined) dbUpdates.locationVerified = updates.locationVerified;
       if (updates.preferences !== undefined) dbUpdates.preferences = updates.preferences;
       
       // Only update if there are changes to make
@@ -691,19 +689,18 @@ export class DbStorage implements IStorage {
 
   async createUserReport(report: InsertUserReport): Promise<UserReport> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbReport: any = {
-        reporter_id: report.reporterId,
-        reported_user_id: report.reportedUserId,
-        report_type: report.reportType,
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.userReports).values({
+        reporterId: report.reporterId,
+        reportedUserId: report.reportedUserId,
+        reportType: report.reportType,
         description: report.description,
-        book_id: report.bookId,
-        chat_id: report.chatId,
-        status: report.status || 'pending',
-        created_at: report.createdAt || new Date()
-      };
+        bookId: report.bookId,
+        chatId: report.chatId,
+        status: 'pending'
+        // createdAt is handled by the database default
+      }).returning();
       
-      const result = await db.insert(schema.userReports).values(dbReport).returning();
       return result[0];
     } catch (error) {
       console.error("Error creating user report:", error);
@@ -713,14 +710,12 @@ export class DbStorage implements IStorage {
 
   async updateUserReportStatus(id: number, status: string): Promise<void> {
     try {
-      // Convert camelCase properties to snake_case for database columns
-      const dbUpdates: any = { 
-        status,
-        resolved_at: status !== 'pending' ? new Date() : undefined
-      };
-      
+      // Fix: Use camelCase property names to match the TypeScript schema
       await db.update(schema.userReports)
-        .set(dbUpdates)
+        .set({ 
+          status,
+          resolvedAt: status !== 'pending' ? new Date() : undefined
+        })
         .where(eq(schema.userReports.id, id));
     } catch (error) {
       console.error(`Error updating report status ${id}:`, error);
@@ -767,21 +762,29 @@ export class DbStorage implements IStorage {
 
   async createBook(book: InsertBook): Promise<Book> {
     try {
-      // Convert property names to snake_case for database columns
-      const dbBook: any = {
+      // Fix: Handle optional communityId in InsertBook schema
+      const bookValues: any = {
         title: book.title,
         author: book.author,
-        description: book.description,
-        google_books_id: book.googleBooksId,
-        owner_id: book.ownerId,
-        community_id: book.communityId,
-        condition: book.condition,
+        description: book.description || null, // Handle optional description
+        googleBooksId: book.googleBooksId || null, // Handle optional googleBooksId
+        ownerId: book.ownerId,
+        condition: book.condition || null, // Handle optional condition
         genre: book.genre,
-        image_url: book.imageUrl,
-        unlisted: book.unlisted
+        imageUrl: book.imageUrl || null, // Handle optional imageUrl
+        unlisted: book.unlisted || false // Default to false if not provided
       };
       
-      const result = await db.insert(schema.books).values(dbBook).returning();
+      // communityId is optional in the InsertBook schema, but required in the database
+      // If not provided, set it to a default value (e.g., 1 for general community)
+      if (book.communityId !== undefined) {
+        bookValues.communityId = book.communityId;
+      } else {
+        bookValues.communityId = 1; // Default community ID if none provided
+      }
+      
+      const result = await db.insert(schema.books).values(bookValues).returning();
+      
       return result[0];
     } catch (error) {
       console.error("Error creating book:", error);
@@ -791,22 +794,22 @@ export class DbStorage implements IStorage {
 
   async updateBook(id: number, updates: Partial<Book>): Promise<Book> {
     try {
-      // Convert camelCase properties to snake_case for database columns
-      const dbUpdates: any = {};
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<Book> = {};
       
       if (updates.title !== undefined) dbUpdates.title = updates.title;
       if (updates.author !== undefined) dbUpdates.author = updates.author;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
-      if (updates.googleBooksId !== undefined) dbUpdates.google_books_id = updates.googleBooksId;
-      if (updates.ownerId !== undefined) dbUpdates.owner_id = updates.ownerId;
-      if (updates.communityId !== undefined) dbUpdates.community_id = updates.communityId;
+      if (updates.googleBooksId !== undefined) dbUpdates.googleBooksId = updates.googleBooksId;
+      if (updates.ownerId !== undefined) dbUpdates.ownerId = updates.ownerId;
+      if (updates.communityId !== undefined) dbUpdates.communityId = updates.communityId;
       if (updates.borrowed !== undefined) dbUpdates.borrowed = updates.borrowed;
-      if (updates.borrowerId !== undefined) dbUpdates.borrower_id = updates.borrowerId;
-      if (updates.borrowDeadline !== undefined) dbUpdates.borrow_deadline = updates.borrowDeadline;
+      if (updates.borrowerId !== undefined) dbUpdates.borrowerId = updates.borrowerId;
+      if (updates.borrowDeadline !== undefined) dbUpdates.borrowDeadline = updates.borrowDeadline;
       if (updates.returned !== undefined) dbUpdates.returned = updates.returned;
       if (updates.condition !== undefined) dbUpdates.condition = updates.condition;
       if (updates.genre !== undefined) dbUpdates.genre = updates.genre;
-      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+      if (updates.imageUrl !== undefined) dbUpdates.imageUrl = updates.imageUrl;
       if (updates.donated !== undefined) dbUpdates.donated = updates.donated;
       if (updates.unlisted !== undefined) dbUpdates.unlisted = updates.unlisted;
       
@@ -852,17 +855,18 @@ export class DbStorage implements IStorage {
     try {
       console.log("Creating community:", community);
       
-      // CRITICAL FIX: Drizzle expects an array of values
+      // Fix the property names to match the TypeScript schema definition 
+      // rather than the database column names
       const result = await db.insert(schema.communities).values({
         name: community.name,
         description: community.description,
         location: community.location,
         state: community.state,
         city: community.city,
-        image_url: community.imageUrl,
-        is_public: community.isPublic,
-        created_by: community.createdBy
-        // created_at is handled by the database default
+        imageUrl: community.imageUrl,
+        isPublic: community.isPublic,
+        createdBy: community.createdBy
+        // createdAt is handled by the database default
       }).returning();
       
       console.log("Community created successfully:", result[0]);
@@ -875,18 +879,18 @@ export class DbStorage implements IStorage {
 
   async updateCommunity(id: number, updates: Partial<Community>): Promise<void> {
     try {
-      // Convert camelCase properties to snake_case for database columns
-      const dbUpdates: any = {};
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<Community> = {};
       
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
       if (updates.location !== undefined) dbUpdates.location = updates.location;
       if (updates.state !== undefined) dbUpdates.state = updates.state;
       if (updates.city !== undefined) dbUpdates.city = updates.city;
-      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
-      if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
-      if (updates.createdAt !== undefined) dbUpdates.created_at = updates.createdAt;
-      if (updates.createdBy !== undefined) dbUpdates.created_by = updates.createdBy;
+      if (updates.imageUrl !== undefined) dbUpdates.imageUrl = updates.imageUrl;
+      if (updates.isPublic !== undefined) dbUpdates.isPublic = updates.isPublic;
+      if (updates.createdAt !== undefined) dbUpdates.createdAt = updates.createdAt;
+      if (updates.createdBy !== undefined) dbUpdates.createdBy = updates.createdBy;
       
       // Only update if there are changes to make
       if (Object.keys(dbUpdates).length > 0) {
@@ -923,12 +927,12 @@ export class DbStorage implements IStorage {
     try {
       console.log("Creating join request:", request);
       
-      // CRITICAL FIX: Pass values directly to Drizzle
+      // Fix: Use camelCase property names to match the TypeScript schema
       const result = await db.insert(schema.communityJoinRequests).values({
-        user_id: request.userId,
-        community_id: request.communityId,
+        userId: request.userId,
+        communityId: request.communityId,
         status: 'pending' // Status is set by the database default
-        // created_at is handled by the database default
+        // createdAt is handled by the database default
       }).returning();
       
       console.log("Join request created successfully:", result[0]);
@@ -964,10 +968,10 @@ export class DbStorage implements IStorage {
     try {
       console.log("Creating community chat:", chat);
       
-      // CRITICAL FIX: Pass values directly to Drizzle - we need to use snakeCase names
+      // Fix: Use camelCase property names to match the TypeScript schema
       const result = await db.insert(schema.communityChats).values({
-        community_id: chat.communityId,
-        user_id: chat.userId,
+        communityId: chat.communityId,
+        userId: chat.userId,
         message: chat.message
         // timestamp is handled by the database default
       }).returning();
@@ -994,13 +998,13 @@ export class DbStorage implements IStorage {
     try {
       console.log("Creating borrow request:", request);
       
-      // CRITICAL FIX: Pass values directly to Drizzle using the proper format
+      // Fix: Use camelCase property names to match the TypeScript schema
       const result = await db.insert(schema.borrowRequests).values({
-        book_id: request.bookId,
-        requester_id: request.requesterId,
+        bookId: request.bookId,
+        requesterId: request.requesterId,
         status: 'pending', // Default status
-        requested_return_date: request.requestedReturnDate
-        // created_at is handled by the database default
+        requestedReturnDate: request.requestedReturnDate
+        // createdAt is handled by the database default
       }).returning();
       
       console.log("Borrow request created successfully:", result[0]);
@@ -1039,12 +1043,12 @@ export class DbStorage implements IStorage {
     try {
       console.log("Creating chat:", chat);
       
-      // CRITICAL FIX: Pass values directly to Drizzle using the proper format
+      // Fix: Use camelCase property names to match the TypeScript schema
       const result = await db.insert(schema.chats).values({
-        sender_id: chat.senderId,
-        receiver_id: chat.receiverId,
+        senderId: chat.senderId,
+        receiverId: chat.receiverId,
         message: chat.message,
-        book_id: chat.bookId
+        bookId: chat.bookId
         // timestamp is handled by the database default
       }).returning();
       
@@ -1059,5 +1063,5 @@ export class DbStorage implements IStorage {
   // No need for getter as sessionStore is already public
 }
 
-// Use MemStorage for in-memory storage
-export const storage = new MemStorage();
+// Use DbStorage for persistent storage with database
+export const storage = new DbStorage();
