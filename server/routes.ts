@@ -602,6 +602,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const owner = await storage.getUser(book.ownerId);
             if (owner) {
               bookOwners.set(book.ownerId, owner);
+              
+              // Add owner location info to the book for frontend display
+              (book as any).ownerCity = owner.city;
+              (book as any).ownerState = owner.state;
+            }
+          } else {
+            // Use cached owner data
+            const owner = bookOwners.get(book.ownerId);
+            if (owner) {
+              (book as any).ownerCity = owner.city;
+              (book as any).ownerState = owner.state;
             }
           }
         }

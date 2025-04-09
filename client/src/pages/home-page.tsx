@@ -238,8 +238,21 @@ export default function HomePage() {
                 <ScrollArea className="h-24">
                   <p className="text-sm">{book.description}</p>
                 </ScrollArea>
-                <div className="flex items-center mt-4 text-sm text-muted-foreground">
-                  <div className="flex items-center">
+                <div className="flex flex-col gap-2 mt-4">
+                  {(book as any).ownerCity && (book as any).ownerCity === user?.city && (
+                    <div className="flex items-center text-sm text-green-600 bg-green-50 dark:bg-green-950/30 rounded-full px-2 py-1 w-fit">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      <span>In your city</span>
+                    </div>
+                  )}
+                  {(book as any).ownerCity && (book as any).ownerCity !== user?.city && 
+                   (book as any).ownerState && (book as any).ownerState === user?.state && (
+                    <div className="flex items-center text-sm text-blue-600 bg-blue-50 dark:bg-blue-950/30 rounded-full px-2 py-1 w-fit">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      <span>In your state</span>
+                    </div>
+                  )}
+                  <div className="flex items-center text-sm text-muted-foreground">
                     <UserCheck className="h-4 w-4 mr-1" />
                     <span>Available for borrowing</span>
                   </div>

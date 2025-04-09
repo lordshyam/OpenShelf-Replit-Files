@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin, UserCheck, BookOpen, Calendar } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -144,107 +144,159 @@ export default function LocationSetupPage() {
   }
 
   return (
-    <div className="container max-w-md py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Location Setup</CardTitle>
-          <CardDescription>
-            Please select your state and city in India to help us better serve you with relevant book listings in your area.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Your State</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        setSelectedState(value);
-                        // Reset city when state changes
-                        form.setValue("city", "");
-                      }}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a state" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {indianStates.map((state) => (
-                          <SelectItem key={state} value={state}>
-                            {state}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+    <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 py-10">
+      <div className="container mx-auto px-4">
+        <div className="flex flex-col md:flex-row gap-8 items-start justify-center">
+          {/* Left side with location form */}
+          <div className="w-full md:w-1/2 lg:w-1/3">
+            <Card className="shadow-lg border-primary/10">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Location Setup
+                </CardTitle>
+                <CardDescription>
+                  Select your location to find books near you
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-medium">Your State</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              setSelectedState(value);
+                              // Reset city when state changes
+                              form.setValue("city", "");
+                            }}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background">
+                                <SelectValue placeholder="Select a state" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {indianStates.map((state) => (
+                                <SelectItem key={state} value={state}>
+                                  {state}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Your City</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      disabled={!selectedState}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue 
-                            placeholder={
-                              selectedState 
-                                ? "Select a city" 
-                                : "Please select a state first"
-                            } 
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {selectedState &&
-                          citiesByState[selectedState]?.map((city) => (
-                            <SelectItem key={city} value={city}>
-                              {city}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-medium">Your City</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            disabled={!selectedState}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background">
+                                <SelectValue 
+                                  placeholder={
+                                    selectedState 
+                                      ? "Select a city" 
+                                      : "Please select a state first"
+                                  } 
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {selectedState &&
+                                citiesByState[selectedState]?.map((city) => (
+                                  <SelectItem key={city} value={city}>
+                                    {city}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <Button 
-                type="submit" 
-                className="w-full"
-                disabled={updateLocationMutation.isPending}
-              >
-                {updateLocationMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Location"
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter className="flex justify-center text-sm text-muted-foreground">
-          Your location helps us prioritize book listings from your area.
-        </CardFooter>
-      </Card>
+                    <Button 
+                      type="submit" 
+                      className="w-full mt-6"
+                      disabled={updateLocationMutation.isPending}
+                    >
+                      {updateLocationMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Location"
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+              <CardFooter className="flex justify-center text-sm text-muted-foreground border-t pt-4">
+                Your location helps us prioritize book listings from your area.
+              </CardFooter>
+            </Card>
+          </div>
+          
+          {/* Right side with info & illustrations */}
+          <div className="w-full md:w-1/2 lg:w-2/5 mt-10 md:mt-0">
+            <div className="bg-primary/5 rounded-xl p-6 shadow-sm">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                Why Location Matters
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
+                    <MapPin className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Local Book Access</h3>
+                    <p className="text-sm text-muted-foreground">OpenShelf prioritizes books from your city first, then from your state.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
+                    <UserCheck className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Build Community</h3>
+                    <p className="text-sm text-muted-foreground">Connect with readers in your neighborhood and strengthen local communities.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
+                    <Calendar className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Easier Exchanges</h3>
+                    <p className="text-sm text-muted-foreground">Meeting with local book owners for pickups and returns is simpler and more convenient.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
