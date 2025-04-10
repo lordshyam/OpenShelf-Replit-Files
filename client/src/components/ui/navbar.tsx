@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "./button";
@@ -5,10 +6,12 @@ import { Avatar, AvatarImage, AvatarFallback } from "./avatar";
 import { HomeIcon, BookOpen, MessageSquare, Settings, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatCredits } from "@/lib/format-credits";
+import { ProfileDialog } from "@/components/profile-dialog";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
+  const [profileOpen, setProfileOpen] = useState(false);
   
   // Check if user is a community admin
   const { data: community } = useQuery({
@@ -72,7 +75,11 @@ export default function Navbar() {
             <span className="font-medium">{formatCredits(user.credits).toFixed(1)}</span>
           </div>
 
-          <Avatar>
+          <Avatar 
+            onClick={() => setProfileOpen(true)}
+            className="cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+            title="Edit Profile"
+          >
             {user.avatar ? (
               <AvatarImage src={`data:image/svg+xml;base64,${btoa(user.avatar)}`} alt={user.username} />
             ) : (
@@ -83,6 +90,9 @@ export default function Navbar() {
           <Button variant="outline" onClick={() => logoutMutation.mutate()}>
             Logout
           </Button>
+          
+          {/* Profile Dialog */}
+          <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
         </div>
       </div>
     </nav>

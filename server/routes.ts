@@ -156,7 +156,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       locationVerified: true
     });
     
+    // Update session user
+    if (req.user) {
+      req.user.state = result.data.state;
+      req.user.city = result.data.city;
+      req.user.locationVerified = true;
+    }
+    
     res.json({ message: "Location updated successfully" });
+  });
+  
+  // Update user profile
+  app.post("/api/user/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Validate request body
+    const profileSchema = z.object({
+      username: z.string().min(3, "Username must be at least 3 characters").optional(),
+      state: z.string().min(1, "State is required").optional(),
+      city: z.string().min(1, "City is required").optional(),
+    });
+    
+    const result = profileSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ message: "Invalid profile data", errors: result.error.format() });
+    }
+    
+    const updates: Partial<User> = {};
+    
+    // Only include fields that were provided
+    if (result.data.username) updates.username = result.data.username;
+    if (result.data.state) {
+      updates.state = result.data.state;
+      updates.locationVerified = true;
+    }
+    if (result.data.city) {
+      updates.city = result.data.city;
+      updates.locationVerified = true;
+    }
+    
+    // Check if username already exists (if changing username)
+    if (updates.username) {
+      const existingUser = await storage.getUserByUsername(updates.username);
+      if (existingUser && existingUser.id !== req.user!.id) {
+        return res.status(400).json({ message: "Username already taken" });
+      }
+    }
+    
+    // Update user
+    await storage.updateUser(req.user!.id, updates);
+    
+    // Update session user
+    if (req.user) {
+      if (updates.username) req.user.username = updates.username;
+      if (updates.state) req.user.state = updates.state;
+      if (updates.city) req.user.city = updates.city;
+      if (updates.locationVerified) req.user.locationVerified = updates.locationVerified;
+    }
+    
+    res.json({ 
+      message: "Profile updated successfully",
+      user: req.user
+    });
   });
 
   // Get all users (for chat and message display)
