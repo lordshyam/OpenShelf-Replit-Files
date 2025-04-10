@@ -612,13 +612,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Join request declined" });
   });
 
+  // Get private chats endpoint
+  app.get("/api/chats", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Get all chats where the user is either the sender or receiver
+      const userId = req.user!.id;
+      const chats = await storage.getChats(userId);
+      
+      // Sort chats by timestamp
+      const sortedChats = chats.sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      res.json(sortedChats);
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+      res.status(500).json({ error: 'Failed to fetch chats' });
+    }
+  });
+
   // Get community chats endpoint
   app.get("/api/community-chats/:communityId", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     const communityId = parseInt(req.params.communityId);
     const chats = await storage.getCommunityChats(communityId);
-    res.json(chats);
+    
+    // Sort chats by timestamp
+    const sortedChats = chats.sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    
+    res.json(sortedChats);
   });
 
   // User preferences

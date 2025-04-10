@@ -89,9 +89,25 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
             case 'CHAT_MESSAGE':
               const chat = data.chat as Chat;
+              
+              // Make a copy of the chat to ensure it's properly serialized
+              const chatToStore = { ...chat };
+              
+              // Ensure we update the React Query cache with the received message
               queryClient.setQueryData(["/api/chats", user?.id], (oldChats: Chat[] | undefined) => {
-                if (!oldChats) return [chat];
-                return [...oldChats, chat];
+                if (!oldChats) return [chatToStore];
+                
+                // Check for duplicates to avoid adding the same message twice
+                const isDuplicate = oldChats.some(
+                  c => c.id === chatToStore.id || 
+                      (c.senderId === chatToStore.senderId && 
+                       c.receiverId === chatToStore.receiverId &&
+                       c.message === chatToStore.message && 
+                       Math.abs(new Date(c.timestamp).getTime() - new Date(chatToStore.timestamp).getTime()) < 1000)
+                );
+                
+                if (isDuplicate) return oldChats;
+                return [...oldChats, chatToStore];
               });
 
               // Special handling for system messages from OpenShelf
@@ -101,7 +117,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                   description: data.bookTitle ? `About book "${data.bookTitle}": ${chat.message}` : chat.message,
                 });
               } 
-              // Regular user messages
+              // Regular user messages - only show notifications for messages from others
               else if (chat.senderId !== user?.id) {
                 toast({
                   title: "New Message",
@@ -113,6 +129,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             case 'COMMUNITY_CHAT':
               console.log('Received community chat message:', data);
               const communityChat = data.chat as CommunityChat;
+              
+              // Make a copy to ensure it's properly serialized
+              const communityChatToStore = { ...communityChat };
               
               // Get additional data if this is a book listing message
               if (data.book) {
@@ -131,21 +150,27 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               // Only process if we have user data
               if (user) {
                 // Only update the UI if the user belongs to this community
-                if (user.communityId === communityChat.communityId) {
-                  queryClient.setQueryData(["/api/community-chats", communityChat.communityId], 
+                if (user.communityId === communityChatToStore.communityId) {
+                  // Store the message in the query cache
+                  queryClient.setQueryData(["/api/community-chats", communityChatToStore.communityId], 
                     (oldChats: CommunityChat[] | undefined) => {
-                      if (!oldChats) return [communityChat];
+                      if (!oldChats) return [communityChatToStore];
                       
                       // Don't add duplicate messages (can happen if server broadcasts to all)
                       const isDuplicate = oldChats.some(
-                        c => c.id === communityChat.id || 
-                            (c.userId === communityChat.userId && 
-                             c.message === communityChat.message && 
-                             Math.abs(new Date(c.timestamp).getTime() - new Date(communityChat.timestamp).getTime()) < 1000)
+                        c => c.id === communityChatToStore.id || 
+                            (c.userId === communityChatToStore.userId && 
+                             c.message === communityChatToStore.message && 
+                             Math.abs(new Date(c.timestamp).getTime() - new Date(communityChatToStore.timestamp).getTime()) < 1000)
                       );
                       
                       if (isDuplicate) return oldChats;
-                      return [...oldChats, communityChat];
+                      
+                      // Add message to cache, ensuring proper sort order
+                      const updatedChats = [...oldChats, communityChatToStore]
+                        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                      
+                      return updatedChats;
                     }
                   );
 
@@ -177,7 +202,22 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 queryClient.setQueryData(["/api/community-chats", user.communityId], 
                   (oldChats: CommunityChat[] | undefined) => {
                     if (!oldChats) return [confirmChat];
-                    return [...oldChats, confirmChat];
+                    
+                    // Don't add duplicate messages
+                    const isDuplicate = oldChats.some(
+                      c => c.id === confirmChat.id || 
+                          (c.userId === confirmChat.userId && 
+                           c.message === confirmChat.message && 
+                           Math.abs(new Date(c.timestamp).getTime() - new Date(confirmChat.timestamp).getTime()) < 5000)
+                    );
+                    
+                    if (isDuplicate) return oldChats;
+                    
+                    // Add message to cache, ensuring proper sort order
+                    const updatedChats = [...oldChats, confirmChat]
+                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                    
+                    return updatedChats;
                   }
                 );
               }
@@ -200,7 +240,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 );
                 
                 if (isDuplicate) return oldChats;
-                return [...oldChats, confirmedChat];
+                
+                // Add message to cache, ensuring proper sort order
+                const updatedChats = [...oldChats, confirmedChat]
+                  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                
+                return updatedChats;
               });
               break;
 
