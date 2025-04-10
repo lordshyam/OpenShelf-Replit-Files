@@ -59,10 +59,11 @@ export interface IStorage {
   getCommunityChats(communityId: number): Promise<CommunityChat[]>;
   createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat>;
 
-  // Existing operations remain unchanged
+  // Borrow and chat operations
   getBorrowRequests(userId: number): Promise<BorrowRequest[]>;
+  getAllBorrowRequests(): Promise<BorrowRequest[]>; // New method to get all borrow requests
   createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest>;
-  updateBorrowRequest(id: number, status: string): Promise<void>;
+  updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void>; // Updated with optional returnDate
   getChats(userId: number): Promise<Chat[]>;
   createChat(chat: InsertChat): Promise<Chat>;
   
@@ -377,6 +378,11 @@ export class MemStorage implements IStorage {
       }
     );
   }
+  
+  async getAllBorrowRequests(): Promise<BorrowRequest[]> {
+    // Return all borrow requests in the system
+    return Array.from(this.borrowRequests.values());
+  }
 
   async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
     const id = this.currentId++;
@@ -391,10 +397,16 @@ export class MemStorage implements IStorage {
     return borrowRequest;
   }
 
-  async updateBorrowRequest(id: number, status: string): Promise<void> {
+  async updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void> {
     const request = this.borrowRequests.get(id);
     if (!request) throw new Error("Borrow request not found");
     request.status = status;
+    
+    // Update the return date if provided
+    if (returnDate) {
+      request.requestedReturnDate = returnDate;
+    }
+    
     this.borrowRequests.set(id, request);
   }
 
@@ -987,9 +999,49 @@ export class DbStorage implements IStorage {
   // Borrow requests
   async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
     try {
-      return await db.select().from(schema.borrowRequests).where(eq(schema.borrowRequests.requesterId, userId));
+      // First, get requests where user is the requester
+      const requesterRequests = await db.select()
+        .from(schema.borrowRequests)
+        .where(eq(schema.borrowRequests.requesterId, userId));
+      
+      // Then, get the books owned by this user
+      const ownedBooks = await db.select().from(schema.books)
+        .where(eq(schema.books.ownerId, userId));
+      
+      if (ownedBooks.length === 0) {
+        return requesterRequests;
+      }
+      
+      // Get the book IDs owned by this user
+      const ownedBookIds = ownedBooks.map(book => book.id);
+      
+      // Get requests for books owned by this user
+      const ownerRequests = await db.select()
+        .from(schema.borrowRequests)
+        .where(inArray(schema.borrowRequests.bookId, ownedBookIds));
+      
+      // Combine the two sets of requests (removing duplicates)
+      const combinedRequests = [...requesterRequests];
+      
+      for (const req of ownerRequests) {
+        if (!combinedRequests.some(r => r.id === req.id)) {
+          combinedRequests.push(req);
+        }
+      }
+      
+      return combinedRequests;
     } catch (error) {
       console.error(`Error fetching borrow requests for user ${userId}:`, error);
+      return [];
+    }
+  }
+  
+  async getAllBorrowRequests(): Promise<BorrowRequest[]> {
+    try {
+      // Get all borrow requests from the database
+      return await db.select().from(schema.borrowRequests);
+    } catch (error) {
+      console.error("Error fetching all borrow requests:", error);
       return [];
     }
   }
@@ -1015,7 +1067,7 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async updateBorrowRequest(id: number, status: string): Promise<void> {
+  async updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void> {
     try {
       await db.update(schema.borrowRequests)
         .set({ status })

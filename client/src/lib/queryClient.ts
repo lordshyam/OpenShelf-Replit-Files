@@ -48,7 +48,7 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: true, // Enable refetch on window focus
       staleTime: 5 * 60 * 1000, // 5 minutes, increased stale time for better persistence
-      cacheTime: 60 * 60 * 1000, // 1 hour, keep data in cache longer
+      gcTime: 60 * 60 * 1000, // 1 hour, keep data in cache longer (formerly cacheTime)
       retry: 1, // Retry once on failure
       refetchOnMount: "always", // Always refetch when component mounts
     },
