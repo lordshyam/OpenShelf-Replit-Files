@@ -40,7 +40,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             queryClient.invalidateQueries({ queryKey: ["/api/books"] });
             
             if (user.communityId) {
-              queryClient.invalidateQueries({ queryKey: ["/api/community-chats"] });
+              queryClient.invalidateQueries({ queryKey: [`/api/community-chats/${user.communityId}`] });
             }
           }
           
@@ -152,7 +152,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                 // Only update the UI if the user belongs to this community
                 if (user.communityId === communityChatToStore.communityId) {
                   // Store the message in the query cache
-                  queryClient.setQueryData(["/api/community-chats", communityChatToStore.communityId], 
+                  queryClient.setQueryData([`/api/community-chats/${communityChatToStore.communityId}`], 
                     (oldChats: CommunityChat[] | undefined) => {
                       if (!oldChats) return [communityChatToStore];
                       
@@ -199,7 +199,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                   timestamp: new Date()
                 };
                 
-                queryClient.setQueryData(["/api/community-chats", user.communityId], 
+                queryClient.setQueryData([`/api/community-chats/${user.communityId}`], 
                   (oldChats: CommunityChat[] | undefined) => {
                     if (!oldChats) return [confirmChat];
                     

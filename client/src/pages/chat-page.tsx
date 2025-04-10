@@ -52,7 +52,7 @@ export default function ChatPage() {
   });
 
   const { data: communityChats, isLoading: loadingCommunityChats } = useQuery<CommunityChat[]>({
-    queryKey: ["/api/community-chats", user?.communityId],
+    queryKey: [`/api/community-chats/${user?.communityId}`],
     enabled: !!user?.communityId,
     staleTime: 0, // Consider data always stale to ensure fresh data on page navigation
   });
