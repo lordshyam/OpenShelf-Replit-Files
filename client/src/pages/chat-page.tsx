@@ -215,7 +215,7 @@ export default function ChatPage() {
     // Optimistically add the message to the UI
     if (communityChats) {
       queryClient.setQueryData(
-        ["/api/community-chats", user.communityId], 
+        [`/api/community-chats/${user.communityId}`], 
         [...communityChats, tempCommunityMessage].sort((a, b) => 
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         )
