@@ -47,11 +47,14 @@ export default function ChatPage() {
 
   const { data: chats, isLoading: loadingChats } = useQuery<Chat[]>({
     queryKey: ["/api/chats", user?.id],
+    enabled: !!user?.id, // Only run the query when we have a user ID
+    staleTime: 0, // Consider data always stale to ensure fresh data on page navigation
   });
 
   const { data: communityChats, isLoading: loadingCommunityChats } = useQuery<CommunityChat[]>({
     queryKey: ["/api/community-chats", user?.communityId],
     enabled: !!user?.communityId,
+    staleTime: 0, // Consider data always stale to ensure fresh data on page navigation
   });
   
   // Get community data
@@ -118,11 +121,18 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (activeChat && chats) {
+      // Filter messages for the active chat
       const activeMessages = chats.filter(chat =>
         (chat.senderId === user?.id && chat.receiverId === activeChat) ||
         (chat.receiverId === user?.id && chat.senderId === activeChat)
       );
-      setMessages(activeMessages);
+      
+      // Sort messages by timestamp
+      const sortedMessages = [...activeMessages].sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      setMessages(sortedMessages);
     }
   }, [activeChat, chats, user?.id]);
 
@@ -169,8 +179,10 @@ export default function ChatPage() {
       bookId: bookId || null
     };
     
-    // Optimistically add the message to the UI
-    setMessages(prev => [...prev, tempMessage]);
+    // Optimistically add the message to the UI and ensure proper sorting
+    setMessages(prev => [...prev, tempMessage].sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    ));
     
     // Send the message to the server via WebSocket
     send({
@@ -204,7 +216,9 @@ export default function ChatPage() {
     if (communityChats) {
       queryClient.setQueryData(
         ["/api/community-chats", user.communityId], 
-        [...communityChats, tempCommunityMessage]
+        [...communityChats, tempCommunityMessage].sort((a, b) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        )
       );
     }
     
