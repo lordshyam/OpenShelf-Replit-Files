@@ -838,8 +838,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Borrow requests
   app.get("/api/borrow-requests", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const requests = await storage.getBorrowRequests(req.user!.id);
-    res.json(requests);
+    
+    try {
+      // Get all borrow requests related to the current user
+      // This includes both requests they've made and requests for their books
+      const requests = await storage.getBorrowRequests(req.user!.id);
+      
+      // Get all books to ensure we can also identify borrow requests 
+      // where the user is the owner of the requested book
+      const books = await storage.getBooks();
+      const ownedBookIds = books
+        .filter(book => book.ownerId === req.user!.id)
+        .map(book => book.id);
+        
+      // Get other requests where user is the book owner
+      const allRequests = await storage.getAllBorrowRequests();
+      const ownedBookRequests = allRequests.filter(req => 
+        ownedBookIds.includes(req.bookId)
+      );
+      
+      // Combine both sets of requests (deduplicate by ID)
+      const combinedRequests = [...requests];
+      
+      for (const req of ownedBookRequests) {
+        if (!combinedRequests.some(r => r.id === req.id)) {
+          combinedRequests.push(req);
+        }
+      }
+      
+      res.json(combinedRequests);
+    } catch (error) {
+      console.error("Error fetching borrow requests:", error);
+      res.status(500).json({ message: "Failed to fetch borrow requests" });
+    }
   });
 
   app.post("/api/books/:id/borrow", async (req, res) => {
