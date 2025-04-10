@@ -883,7 +883,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!book) return res.status(404).send("Book not found");
     if (book.borrowed) return res.status(400).send("Book already borrowed");
-    if (req.user!.credits < 1) return res.status(400).send("Insufficient credits. You need 1 credit to borrow a book.");
+    
+    // Ensure user has exactly 1.0 credits (internal value: 2) for borrowing
+    if (req.user!.credits < 2) {
+      return res.status(400).json({
+        message: "Insufficient credits. You need 1.0 credit to borrow a book.",
+        currentCredits: req.user!.credits / 2, // Convert to display value for client
+        requiredCredits: 1.0
+      });
+    }
     
     // Check if user has any unreturned books
     const borrowedBooks = await storage.getBooksByBorrower(req.user!.id);
@@ -959,22 +967,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const allRequests = (await storage.getBorrowRequests(req.user!.id))
       .filter(r => r.bookId === book.id && r.status === "pending");
     
-    // Update the accepted request status
-    await storage.updateBorrowRequest(requestId, "accepted");
+    // Get any custom return date set by the owner when accepting the request
+    const ownerSetReturnDate = req.body.returnDate ? new Date(req.body.returnDate) : null;
+    
+    // Default return date is two weeks from now if none is specified
+    const twoWeeksFromNow = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 2 weeks
+    
+    // Determine which return date to use (priority: owner-set > requester-set > default)
+    const finalReturnDate = ownerSetReturnDate || request.requestedReturnDate || twoWeeksFromNow;
+    
+    // Update the request with the return date
+    await storage.updateBorrowRequest(
+      requestId, 
+      "accepted", 
+      finalReturnDate
+    );
 
     // Update the book status
-    const twoWeeksFromNow = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 2 weeks
     await storage.updateBook(book.id, {
       borrowed: true,
       borrowerId: request.requesterId,
-      borrowDeadline: request.requestedReturnDate || twoWeeksFromNow,
+      borrowDeadline: finalReturnDate,
     });
 
     // Deduct credits from borrower and broadcast update
     const borrower = await storage.getUser(request.requesterId);
     if (borrower) {
-      // Deduct 0.5 credits (internal value: 1)
-      const newCredits = borrower.credits - 1;
+      // Deduct 1.0 credits (internal value: 2)
+      const newCredits = borrower.credits - 2;
       await storage.updateUserCredits(borrower.id, newCredits);
 
       wss.clients.forEach((client) => {
@@ -1151,8 +1171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Credit the borrower back for returning the book
     if (borrower) {
-      // Return 0.5 credits (internal value: 1)
-      const newCredits = borrower.credits + 1;
+      // Return 1.0 credits (internal value: 2)
+      const newCredits = borrower.credits + 2;
       await storage.updateUserCredits(borrower.id, newCredits);
       
       // Send credit update notification
@@ -1171,7 +1191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const chat = await storage.createChat({
       senderId: req.user!.id,
       receiverId: book.borrowerId!,
-      message: `I've confirmed that you returned "${book.title}". Thank you! Your 0.5 credit has been returned to your account.`,
+      message: `I've confirmed that you returned "${book.title}". Thank you! Your 1.0 credit has been returned to your account.`,
       bookId,
     });
 

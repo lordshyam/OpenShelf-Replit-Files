@@ -6,7 +6,7 @@ import {
   InsertUserReport
 } from "@shared/schema";
 import * as schema from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, pool, executeDbOperation } from "./db";
 import { getRandomAvatar } from "@shared/avatars";
 import session from "express-session";
@@ -1015,10 +1015,11 @@ export class DbStorage implements IStorage {
       // Get the book IDs owned by this user
       const ownedBookIds = ownedBooks.map(book => book.id);
       
-      // Get requests for books owned by this user
-      const ownerRequests = await db.select()
-        .from(schema.borrowRequests)
-        .where(inArray(schema.borrowRequests.bookId, ownedBookIds));
+      // Get all borrow requests and filter for those related to user's books
+      const allRequests = await db.select().from(schema.borrowRequests);
+      
+      // Filter requests for books owned by this user
+      const ownerRequests = allRequests.filter(req => ownedBookIds.includes(req.bookId));
       
       // Combine the two sets of requests (removing duplicates)
       const combinedRequests = [...requesterRequests];
@@ -1069,9 +1070,20 @@ export class DbStorage implements IStorage {
 
   async updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void> {
     try {
+      // Create update object with status
+      const updates: any = { status };
+      
+      // Add return date if provided
+      if (returnDate) {
+        updates.requestedReturnDate = returnDate;
+      }
+      
+      // Update the borrow request with new status and optional return date
       await db.update(schema.borrowRequests)
-        .set({ status })
+        .set(updates)
         .where(eq(schema.borrowRequests.id, id));
+        
+      console.log(`Updated borrow request ${id} to status: ${status}${returnDate ? `, return date: ${returnDate}` : ''}`);
     } catch (error) {
       console.error(`Error updating borrow request ${id}:`, error);
       throw error;
