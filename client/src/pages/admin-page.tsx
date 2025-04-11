@@ -116,12 +116,26 @@ export default function AdminPage() {
   // Query for admin dashboard stats
   const { data: adminStats, isLoading: statsLoading, refetch: refetchStats } = useQuery<AdminStats>({
     queryKey: ['/api/admin/stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/stats');
+      if (!response.ok) {
+        throw new Error('Failed to fetch admin stats');
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
   });
 
   // Query for users list
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/users');
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
     enabled: activeTab === 'users',
   });
@@ -129,6 +143,13 @@ export default function AdminPage() {
   // Query for books list
   const { data: books, isLoading: booksLoading, refetch: refetchBooks } = useQuery<Book[]>({
     queryKey: ['/api/admin/books'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/books');
+      if (!response.ok) {
+        throw new Error('Failed to fetch books');
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
     enabled: activeTab === 'books',
   });
@@ -136,6 +157,13 @@ export default function AdminPage() {
   // Query for communities list
   const { data: communities, isLoading: communitiesLoading, refetch: refetchCommunities } = useQuery<Community[]>({
     queryKey: ['/api/admin/communities'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/communities');
+      if (!response.ok) {
+        throw new Error('Failed to fetch communities');
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
     enabled: activeTab === 'communities',
   });
@@ -143,6 +171,13 @@ export default function AdminPage() {
   // Query for reports list
   const { data: reports, isLoading: reportsLoading, refetch: refetchReports } = useQuery<UserReport[]>({
     queryKey: ['/api/admin/reports'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/reports');
+      if (!response.ok) {
+        throw new Error('Failed to fetch reports');
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
     enabled: activeTab === 'reports',
   });
