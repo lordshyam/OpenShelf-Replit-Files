@@ -18,6 +18,26 @@ export async function verifyBookInformation(title: string, author: string): Prom
   error?: string;
 }> {
   try {
+    // Basic input validation
+    if (title.length < 2 || author.length < 2) {
+      return {
+        isValid: false,
+        normalizedTitle: normalizeText(title),
+        normalizedAuthor: normalizeText(author),
+        error: "Title and author must be at least 2 characters long"
+      };
+    }
+
+    // Check for nonsense input (repeated characters, random keystrokes)
+    if (hasRepeatedCharacters(title) || hasRepeatedCharacters(author)) {
+      return {
+        isValid: false,
+        normalizedTitle: normalizeText(title),
+        normalizedAuthor: normalizeText(author),
+        error: "Invalid title or author format"
+      };
+    }
+
     const query = `${title}+inauthor:${author}`;
     const response = await axios.get<GoogleBookResponse>(
       `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&langRestrict=en`
@@ -41,13 +61,14 @@ export async function verifyBookInformation(title: string, author: string): Prom
     const titleSimilarity = calculateSimilarity(normalizeText(title), normalizeText(bookTitle));
     const authorSimilarity = calculateSimilarity(normalizeText(author), normalizeText(bookAuthor));
 
-    const isValid = titleSimilarity > 0.8 && authorSimilarity > 0.7;
+    // Increase similarity thresholds for stricter matching
+    const isValid = titleSimilarity > 0.85 && authorSimilarity > 0.8;
 
     return {
       isValid,
       normalizedTitle: normalizeText(bookTitle),
       normalizedAuthor: normalizeText(bookAuthor),
-      error: isValid ? undefined : "Book details don't match our records"
+      error: isValid ? undefined : "Book details don't match our records closely enough"
     };
   } catch (error) {
     console.error('Error verifying book:', error);
@@ -66,6 +87,15 @@ function normalizeText(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '') // Remove non-alphanumeric characters
     .trim();
+}
+
+// Check for repeated characters (likely nonsense input)
+function hasRepeatedCharacters(text: string): boolean {
+  const normalized = text.toLowerCase();
+  // Check for 3 or more of the same character in a row
+  return /(.)\1{2,}/.test(normalized) || 
+    // Check for keyboard row patterns
+    /(qwert|asdfg|zxcvb|yuiop|hjkl|bnm)/i.test(normalized);
 }
 
 // Calculate similarity between two strings (Levenshtein distance based)
