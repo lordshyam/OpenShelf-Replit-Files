@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,14 +101,15 @@ export default function MyLibrary() {
     }
     
     // Clear any pending timeouts
-    if (window.searchTimeout) {
-      clearTimeout(window.searchTimeout);
+    // Use a safer approach without window.searchTimeout
+    if (typeof window !== 'undefined') {
+      const timeoutId = setTimeout(() => {
+        searchBooks(query);
+      }, 300); // 300ms delay
+      
+      // Store the current timeout ID for cleanup on next call
+      return () => clearTimeout(timeoutId);
     }
-    
-    // Set a new timeout
-    window.searchTimeout = setTimeout(() => {
-      searchBooks(query);
-    }, 300); // 300ms delay
   };
   
   // Function to handle selection of a book from search results
