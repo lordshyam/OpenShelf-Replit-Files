@@ -144,11 +144,8 @@ export default function MyLibrary() {
     form.setValue("description", book.description || "");
     form.setValue("genre", book.genre || "Fiction");
     
-    // If the book has an image, set it
-    if (book.imageUrl) {
-      setImagePreview(book.imageUrl);
-      form.setValue("imageUrl", book.imageUrl);
-    }
+    // No longer auto-filling the image - user should upload their own photo
+    // of their physical book copy instead of using the standard cover image
   };
 
   const { data: myBooks, isLoading: loadingBooks } = useQuery<Book[]>({
@@ -708,7 +705,9 @@ export default function MyLibrary() {
                               </div>
                               {!imagePreview && (
                                 <p className="text-sm text-muted-foreground">
-                                  Please upload or capture an image of the book cover
+                                  {selectedBook 
+                                    ? "Please upload a photo of your actual physical copy of the book"
+                                    : "Please upload or capture an image of the book cover"}
                                 </p>
                               )}
                             </div>
