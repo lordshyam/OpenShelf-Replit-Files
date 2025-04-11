@@ -65,7 +65,10 @@ export default function MyLibrary() {
   
   // Function to search books from Google Books API
   const searchBooks = async (query: string) => {
-    if (!query || query.length < 3) return;
+    if (!query || query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
     
     setIsSearching(true);
     try {
@@ -87,6 +90,25 @@ export default function MyLibrary() {
     } finally {
       setIsSearching(false);
     }
+  };
+  
+  // Debounce the search to avoid too many requests
+  const debouncedSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    
+    // Clear any pending timeouts
+    if (window.searchTimeout) {
+      clearTimeout(window.searchTimeout);
+    }
+    
+    // Set a new timeout
+    window.searchTimeout = setTimeout(() => {
+      searchBooks(query);
+    }, 300); // 300ms delay
   };
   
   // Function to handle selection of a book from search results
@@ -458,23 +480,20 @@ export default function MyLibrary() {
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                       {/* Book search component */}
                       <div className="space-y-2">
-                        <Label htmlFor="book-search">Search for a book</Label>
-                        <div className="flex gap-2">
+                        <Label htmlFor="book-search">Type to search for a book</Label>
+                        <div className="relative">
                           <Input
                             id="book-search"
-                            placeholder="Type to search for a book..."
+                            placeholder="Enter title, author, or ISBN..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="flex-1"
+                            onChange={(e) => debouncedSearch(e.target.value)}
+                            className="w-full pr-10"
                           />
-                          <Button
-                            type="button"
-                            onClick={() => searchBooks(searchQuery)}
-                            disabled={isSearching || searchQuery.length < 3}
-                            variant="outline"
-                          >
-                            {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
-                          </Button>
+                          {isSearching && (
+                            <div className="absolute right-3 top-2.5">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                          )}
                         </div>
                         {searchResults.length > 0 && (
                           <div className="rounded-md border bg-background shadow-sm mt-2">
