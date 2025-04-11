@@ -7,11 +7,67 @@ interface GoogleBookResponse {
       title: string;
       authors: string[];
       description?: string;
+      imageLinks?: {
+        thumbnail: string;
+      };
     };
   }[];
 }
 
-export async function verifyBookInformation(title: string, author: string): Promise<{
+// Check if a string contains meaningful content 
+function isMeaningfulText(text: string): boolean {
+  // Remove spaces and special characters
+  const cleaned = text.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  
+  // Check for keyboard patterns or repeated characters
+  if (/(.)\1{2,}/.test(cleaned)) return false; // Repeated characters
+  if (/qwerty|asdfgh|zxcvb/i.test(cleaned)) return false; // Keyboard patterns
+  
+  // Check for random short strings
+  if (cleaned.length < 3) return false;
+  
+  // Check for strings with no vowels (likely random consonants)
+  if (!/[aeiou]/i.test(cleaned)) return false;
+  
+  // Check if all characters are the same
+  if (new Set(cleaned).size < 2) return false;
+
+  return true;
+}
+
+// Check if image data is valid and relevant
+async function validateBookImage(imageData: string, title: string, author: string): Promise<boolean> {
+  try {
+    // Verify image data is properly formatted
+    if (!imageData.startsWith('data:image/')) {
+      return false;
+    }
+
+    // Extract base64 data
+    const base64Data = imageData.split(',')[1];
+    if (!base64Data || base64Data.length < 100) { // Basic size check
+      return false;
+    }
+
+    // TODO: In a production environment, you would:
+    // 1. Use image recognition APIs to verify it's a book cover
+    // 2. Compare image with Google Books cover image
+    // 3. Use OCR to verify text matches title/author
+    // For now, we'll do basic validation
+
+    return true;
+  } catch (error) {
+    console.error('Error validating image:', error);
+    return false;
+  }
+}
+
+export async function verifyBookInformation(
+  title: string, 
+  author: string, 
+  description?: string,
+  imageData?: string
+): Promise<{
   isValid: boolean;
   normalizedTitle: string;
   normalizedAuthor: string;
@@ -19,25 +75,36 @@ export async function verifyBookInformation(title: string, author: string): Prom
 }> {
   try {
     // Basic input validation
-    if (title.length < 2 || author.length < 2) {
+    if (!title || !author) {
       return {
         isValid: false,
         normalizedTitle: normalizeText(title),
         normalizedAuthor: normalizeText(author),
-        error: "Title and author must be at least 2 characters long"
+        error: "Title and author are required"
       };
     }
 
-    // Check for nonsense input (repeated characters, random keystrokes)
-    if (hasRepeatedCharacters(title) || hasRepeatedCharacters(author)) {
+    // Check for meaningful content
+    if (!isMeaningfulText(title) || !isMeaningfulText(author)) {
       return {
         isValid: false,
         normalizedTitle: normalizeText(title),
         normalizedAuthor: normalizeText(author),
-        error: "Invalid title or author format"
+        error: "Title or author appears to be random text"
       };
     }
 
+    // Validate description if provided
+    if (description && !isMeaningfulText(description)) {
+      return {
+        isValid: false,
+        normalizedTitle: normalizeText(title),
+        normalizedAuthor: normalizeText(author),
+        error: "Description appears to be random text"
+      };
+    }
+
+    // Check with Google Books API
     const query = `${title}+inauthor:${author}`;
     const response = await axios.get<GoogleBookResponse>(
       `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&langRestrict=en`
@@ -57,12 +124,25 @@ export async function verifyBookInformation(title: string, author: string): Prom
     const bookTitle = book.title;
     const bookAuthor = book.authors?.[0] || '';
 
+    // Validate image if provided
+    if (imageData) {
+      const isImageValid = await validateBookImage(imageData, title, author);
+      if (!isImageValid) {
+        return {
+          isValid: false,
+          normalizedTitle: normalizeText(title),
+          normalizedAuthor: normalizeText(author),
+          error: "Invalid or irrelevant book image provided"
+        };
+      }
+    }
+
     // Check if the provided title and author are similar to the Google Books data
     const titleSimilarity = calculateSimilarity(normalizeText(title), normalizeText(bookTitle));
     const authorSimilarity = calculateSimilarity(normalizeText(author), normalizeText(bookAuthor));
 
     // Increase similarity thresholds for stricter matching
-    const isValid = titleSimilarity > 0.85 && authorSimilarity > 0.8;
+    const isValid = titleSimilarity > 0.9 && authorSimilarity > 0.85;
 
     return {
       isValid,
@@ -87,15 +167,6 @@ function normalizeText(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '') // Remove non-alphanumeric characters
     .trim();
-}
-
-// Check for repeated characters (likely nonsense input)
-function hasRepeatedCharacters(text: string): boolean {
-  const normalized = text.toLowerCase();
-  // Check for 3 or more of the same character in a row
-  return /(.)\1{2,}/.test(normalized) || 
-    // Check for keyboard row patterns
-    /(qwert|asdfg|zxcvb|yuiop|hjkl|bnm)/i.test(normalized);
 }
 
 // Calculate similarity between two strings (Levenshtein distance based)
