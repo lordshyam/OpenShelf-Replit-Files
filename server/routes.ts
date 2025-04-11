@@ -14,18 +14,32 @@ import { z } from "zod";
 
 // Added functions for book verification
 async function verifyBookInformation(title: string, author: string): Promise<{ isValid: boolean; error?: string; normalizedTitle: string; normalizedAuthor: string }> {
-  // Replace this with your actual Google Books API call
-  // This is a placeholder for demonstration purposes
+  // Normalize the title and author
   const normalizedTitle = normalizeText(title);
   const normalizedAuthor = normalizeText(author);
 
-  // Simulate API call - replace with actual API call
-  const isValid = await simulateGoogleBooksApiCall(normalizedTitle, normalizedAuthor);
-
-  if (isValid) {
+  try {
+    // Attempt to validate against Google Books API
+    const query = `${normalizedTitle} ${normalizedAuthor}`;
+    const encodedQuery = encodeURIComponent(query);
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=1`);
+    
+    if (!response.ok) {
+      throw new Error(`Google Books API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // If we have results, consider it valid
+    if (data.items && data.items.length > 0) {
+      return { isValid: true, normalizedTitle, normalizedAuthor };
+    } else {
+      return { isValid: false, error: "Book not found in Google Books API", normalizedTitle, normalizedAuthor };
+    }
+  } catch (error) {
+    console.error("Error verifying book information:", error);
+    // If API fails, still return validated to avoid blocking book addition
     return { isValid: true, normalizedTitle, normalizedAuthor };
-  } else {
-    return { isValid: false, error: "Book not found in Google Books API", normalizedTitle, normalizedAuthor };
   }
 }
 
@@ -34,15 +48,33 @@ function normalizeText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-
-async function simulateGoogleBooksApiCall(title: string, author: string): Promise<boolean> {
-  // Simulate a call to the Google Books API.  Replace this with your actual API call
-  // This example simply returns true for demonstration purposes.
-  // In a real application, you would need to make an actual API call and check the response.
-  // Consider adding error handling and rate limiting.
-
-  //Example using a simple condition for demonstration
-  return title.length > 3 && author.length > 3;
+// Helper function to search books in Google Books API
+async function searchBooksApi(query: string, maxResults: number = 5) {
+  try {
+    const encodedQuery = encodeURIComponent(query);
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=${maxResults}`);
+    
+    if (!response.ok) {
+      throw new Error(`Google Books API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Transform the response to a simpler format
+    return data.items ? data.items.map((item: any) => ({
+      id: item.id,
+      title: item.volumeInfo.title,
+      author: item.volumeInfo.authors ? item.volumeInfo.authors.join(', ') : 'Unknown',
+      description: item.volumeInfo.description || '',
+      genre: item.volumeInfo.categories ? item.volumeInfo.categories[0] : 'Fiction',
+      imageUrl: item.volumeInfo.imageLinks?.thumbnail || null,
+      publishedDate: item.volumeInfo.publishedDate,
+      publisher: item.volumeInfo.publisher,
+    })) : [];
+  } catch (error) {
+    console.error("Error searching books:", error);
+    return [];
+  }
 }
 
 
@@ -696,6 +728,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Books
+  // Google Books API Search
+  app.get("/api/books/search", async (req, res) => {
+    try {
+      const query = req.query.q;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+      
+      // Use the helper function to search Google Books API
+      const books = await searchBooksApi(query);
+      res.json(books);
+    } catch (error) {
+      console.error("Error searching books:", error);
+      res.status(500).json({ error: "Failed to search books" });
+    }
+  });
+
   app.get("/api/books", async (req, res) => {
     let books = await storage.getBooks();
     let bookOwners: Map<number, User> = new Map();

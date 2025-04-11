@@ -43,6 +43,12 @@ export default function MyLibrary() {
     return savedTab || 'listed';
   });
 
+  // State for book search results
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<any | null>(null);
+  
   const form = useForm<InsertBook>({
     resolver: zodResolver(insertBookSchema),
     defaultValues: {
@@ -56,6 +62,51 @@ export default function MyLibrary() {
     },
     mode: "onChange"
   });
+  
+  // Function to search books from Google Books API
+  const searchBooks = async (query: string) => {
+    if (!query || query.length < 3) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        throw new Error("Failed to search books");
+      }
+      
+      const data = await response.json();
+      setSearchResults(data);
+    } catch (error) {
+      console.error("Error searching books:", error);
+      toast({
+        title: "Error",
+        description: "Failed to search for books. Please try again.",
+        variant: "destructive",
+      });
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  // Function to handle selection of a book from search results
+  const handleBookSelect = (book: any) => {
+    setSelectedBook(book);
+    setSearchResults([]);
+    setSearchQuery("");
+    
+    // Populate form fields with the selected book data
+    form.setValue("title", book.title);
+    form.setValue("author", book.author);
+    form.setValue("description", book.description || "");
+    form.setValue("genre", book.genre || "Fiction");
+    
+    // If the book has an image, set it
+    if (book.imageUrl) {
+      setImagePreview(book.imageUrl);
+      form.setValue("imageUrl", book.imageUrl);
+    }
+  };
 
   const { data: myBooks, isLoading: loadingBooks } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -405,6 +456,84 @@ export default function MyLibrary() {
                   </DialogHeader>
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      {/* Book search component */}
+                      <div className="space-y-2">
+                        <Label htmlFor="book-search">Search for a book</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="book-search"
+                            placeholder="Type to search for a book..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => searchBooks(searchQuery)}
+                            disabled={isSearching || searchQuery.length < 3}
+                            variant="outline"
+                          >
+                            {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                          </Button>
+                        </div>
+                        {searchResults.length > 0 && (
+                          <div className="rounded-md border bg-background shadow-sm mt-2">
+                            <ul className="divide-y max-h-64 overflow-y-auto">
+                              {searchResults.map((book) => (
+                                <li
+                                  key={book.id}
+                                  className="flex items-start p-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                                  onClick={() => handleBookSelect(book)}
+                                >
+                                  <div className="h-16 w-12 flex-shrink-0 mr-3">
+                                    {book.imageUrl ? (
+                                      <img src={book.imageUrl} alt={book.title} className="h-full w-full object-cover rounded" />
+                                    ) : (
+                                      <div className="h-full w-full bg-muted flex items-center justify-center rounded">
+                                        <BookOpen className="h-6 w-6 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm truncate">{book.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                                    {book.genre && (
+                                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary mt-1">
+                                        {book.genre}
+                                      </span>
+                                    )}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Show selected book info if any */}
+                        {selectedBook && (
+                          <div className="rounded-md border bg-background p-3 shadow-sm mt-2">
+                            <div className="flex items-center space-x-3">
+                              {selectedBook.imageUrl && (
+                                <img src={selectedBook.imageUrl} alt={selectedBook.title} className="h-12 w-10 object-cover rounded" />
+                              )}
+                              <div>
+                                <p className="font-medium text-sm">{selectedBook.title}</p>
+                                <p className="text-xs text-muted-foreground">{selectedBook.author}</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedBook(null)}
+                                className="ml-auto"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <FormField
                         control={form.control}
                         name="title"
