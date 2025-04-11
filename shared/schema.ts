@@ -15,6 +15,8 @@ export const users = pgTable("users", {
   state: text("state"),
   city: text("city"),
   locationVerified: boolean("location_verified").default(false),
+  role: text("role").default("user"),  // Possible values: "user", "admin", "moderator", "suspended"
+  status: text("status").default("active"), // Possible values: "active", "suspended", "banned"
   preferences: jsonb("preferences").$type<{
     genres: string[];
     formats: string[];
