@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
@@ -8,6 +8,7 @@ import {
   insertCommunitySchema, 
   userPreferencesSchema,
   insertUserReportSchema,
+  User,
   User
 } from "@shared/schema";
 import { z } from "zod";
@@ -1535,6 +1536,308 @@ export async function registerRoutes(app: Express): Promise<Server> {
         daysOverdue: Math.floor((now.getTime() - new Date(b.borrowDeadline!).getTime()) / (1000 * 60 * 60 * 24))
       }))
     });
+  });
+
+  // Admin API endpoints
+  
+  // Check if user is an admin
+  const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+    if (req.user!.role !== "admin") return res.status(403).json({ error: "Not authorized - Admin access required" });
+    next();
+  };
+  
+  // Get admin stats
+  app.get("/api/admin/stats", isAdmin, async (req, res) => {
+    try {
+      // Get counts of various entities
+      const users = await storage.getUsers();
+      const books = await storage.getBooks();
+      const communities = await storage.getCommunities();
+      const borrowRequests = await storage.getAllBorrowRequests();
+      const userReports = await storage.getUserReports();
+      
+      const activeUsers = users.filter(u => u.status === "active" || !u.status).length;
+      const suspendedUsers = users.filter(u => u.status === "suspended").length;
+      const bannedUsers = users.filter(u => u.status === "banned").length;
+      
+      const availableBooks = books.filter(b => !b.borrowed && !b.unlisted).length;
+      const borrowedBooks = books.filter(b => b.borrowed).length;
+      const unlistedBooks = books.filter(b => b.unlisted).length;
+      
+      const pendingRequests = borrowRequests.filter(r => r.status === "pending").length;
+      const pendingReports = userReports.filter(r => r.status === "pending").length;
+      
+      res.json({
+        users: {
+          total: users.length,
+          active: activeUsers,
+          suspended: suspendedUsers,
+          banned: bannedUsers
+        },
+        books: {
+          total: books.length,
+          available: availableBooks,
+          borrowed: borrowedBooks,
+          unlisted: unlistedBooks
+        },
+        communities: {
+          total: communities.length
+        },
+        requests: {
+          pendingBorrows: pendingRequests,
+          pendingReports: pendingReports
+        }
+      });
+    } catch (error) {
+      console.error("Error getting admin stats:", error);
+      res.status(500).json({ error: "Failed to get admin statistics" });
+    }
+  });
+  
+  // Get all users
+  app.get("/api/admin/users", isAdmin, async (req, res) => {
+    try {
+      const users = await storage.getUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error getting users:", error);
+      res.status(500).json({ error: "Failed to get users" });
+    }
+  });
+  
+  // Update user status or role
+  app.patch("/api/admin/users/:userId", isAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const { status, role } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const updates: Partial<User> = {};
+      if (status) updates.status = status;
+      if (role) updates.role = role;
+      
+      await storage.updateUser(userId, updates);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+  
+  // Get all books with detailed info
+  app.get("/api/admin/books", isAdmin, async (req, res) => {
+    try {
+      const books = await storage.getBooks();
+      const users = await storage.getUsers();
+      
+      // Enhance books with owner and borrower info
+      const enhancedBooks = books.map(book => {
+        const owner = users.find(user => user.id === book.ownerId);
+        const borrower = book.borrowerId ? users.find(user => user.id === book.borrowerId) : null;
+        
+        return {
+          ...book,
+          ownerUsername: owner?.username || "Unknown",
+          borrowerUsername: borrower?.username || null
+        };
+      });
+      
+      res.json(enhancedBooks);
+    } catch (error) {
+      console.error("Error getting books:", error);
+      res.status(500).json({ error: "Failed to get books" });
+    }
+  });
+  
+  // Update book (unlist, remove)
+  app.patch("/api/admin/books/:bookId", isAdmin, async (req, res) => {
+    try {
+      const bookId = parseInt(req.params.bookId);
+      const { unlisted } = req.body;
+      
+      if (!bookId) {
+        return res.status(400).json({ error: "Invalid book ID" });
+      }
+      
+      const book = await storage.updateBook(bookId, { unlisted });
+      res.json({ success: true, book });
+    } catch (error) {
+      console.error("Error updating book:", error);
+      res.status(500).json({ error: "Failed to update book" });
+    }
+  });
+  
+  // Delete book
+  app.delete("/api/admin/books/:bookId", isAdmin, async (req, res) => {
+    try {
+      const bookId = parseInt(req.params.bookId);
+      
+      if (!bookId) {
+        return res.status(400).json({ error: "Invalid book ID" });
+      }
+      
+      await storage.deleteBook(bookId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting book:", error);
+      res.status(500).json({ error: "Failed to delete book" });
+    }
+  });
+  
+  // Get all communities with member counts
+  app.get("/api/admin/communities", isAdmin, async (req, res) => {
+    try {
+      const communities = await storage.getCommunities();
+      const users = await storage.getUsers();
+      
+      const enhancedCommunities = await Promise.all(communities.map(async community => {
+        const members = users.filter(user => user.communityId === community.id);
+        const creator = users.find(user => user.id === community.createdBy);
+        
+        return {
+          ...community,
+          memberCount: members.length,
+          creatorUsername: creator?.username || "Unknown"
+        };
+      }));
+      
+      res.json(enhancedCommunities);
+    } catch (error) {
+      console.error("Error getting communities:", error);
+      res.status(500).json({ error: "Failed to get communities" });
+    }
+  });
+  
+  // Delete community
+  app.delete("/api/admin/communities/:communityId", isAdmin, async (req, res) => {
+    try {
+      const communityId = parseInt(req.params.communityId);
+      
+      if (!communityId) {
+        return res.status(400).json({ error: "Invalid community ID" });
+      }
+      
+      // Get all users in this community
+      const users = await storage.getUsers();
+      const communityUsers = users.filter(user => user.communityId === communityId);
+      
+      // Remove all users from the community
+      for (const user of communityUsers) {
+        await storage.updateUser(user.id, { communityId: null });
+      }
+      
+      // Update community in database
+      await storage.updateCommunity(communityId, { isPublic: false });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting community:", error);
+      res.status(500).json({ error: "Failed to delete community" });
+    }
+  });
+  
+  // Get all user reports for admin
+  app.get("/api/admin/reports", isAdmin, async (req, res) => {
+    try {
+      const reports = await storage.getUserReports();
+      const users = await storage.getUsers();
+      const books = await storage.getBooks();
+      
+      // Enhance reports with username info
+      const enhancedReports = reports.map(report => {
+        const reporter = users.find(user => user.id === report.reporterId);
+        const reportedUser = users.find(user => user.id === report.reportedUserId);
+        const book = report.bookId ? books.find(book => book.id === report.bookId) : null;
+        
+        return {
+          ...report,
+          reporterUsername: reporter?.username || "Unknown",
+          reportedUsername: reportedUser?.username || "Unknown",
+          bookTitle: book?.title || null
+        };
+      });
+      
+      res.json(enhancedReports);
+    } catch (error) {
+      console.error("Error getting reports:", error);
+      res.status(500).json({ error: "Failed to get reports" });
+    }
+  });
+  
+  // Update report status
+  app.patch("/api/admin/reports/:reportId", isAdmin, async (req, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId);
+      const { status } = req.body;
+      
+      if (!reportId) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      await storage.updateUserReportStatus(reportId, status);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating report:", error);
+      res.status(500).json({ error: "Failed to update report" });
+    }
+  });
+  
+  // Modify the reset endpoint to require admin
+  app.post("/api/reset-data", isAdmin, async (req, res) => {
+    try {
+      // First handle database reset if a database is being used
+      try {
+        const db = require("../db");
+        console.log("Resetting database tables...");
+        
+        // Truncate all user-related tables
+        await db.pool.query("TRUNCATE TABLE users CASCADE;");
+        await db.pool.query("TRUNCATE TABLE session CASCADE;");
+        
+        // Reset borrow information in books
+        await db.pool.query("UPDATE books SET borrowed = false, borrower_id = NULL, borrow_deadline = NULL;");
+        
+        // Truncate borrow requests
+        await db.pool.query("TRUNCATE TABLE \"borrowRequests\" CASCADE;");
+        
+        // Truncate community join requests
+        await db.pool.query("TRUNCATE TABLE community_join_requests CASCADE;");
+        
+        // Community membership reset
+        await db.pool.query("UPDATE users SET community_id = NULL;");
+        
+        console.log("Database tables reset successfully");
+      } catch (dbError) {
+        console.error("Database reset error or using in-memory storage only:", dbError);
+      }
+      
+      // Now reset the in-memory storage
+      console.log("Resetting in-memory storage...");
+      storage.resetAllData();
+      
+      // Destroy all sessions
+      if (req.session) {
+        req.session.destroy((err) => {
+          if (err) {
+            console.error("Error destroying session:", err);
+          }
+        });
+      }
+      
+      res.json({ success: true, message: "All data has been reset" });
+    } catch (error) {
+      console.error("Error resetting data:", error);
+      res.status(500).json({ success: false, message: "Failed to reset data" });
+    }
   });
 
   return httpServer;
