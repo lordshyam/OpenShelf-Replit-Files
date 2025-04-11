@@ -189,9 +189,34 @@ export default function MyLibrary() {
     addBookMutation.mutate(data);
   };
 
+  // State for managing return date selection dialog
+  const [returnDateDialogOpen, setReturnDateDialogOpen] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [selectedReturnDate, setSelectedReturnDate] = useState<Date | undefined>(
+    // Default to two weeks from now
+    new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+  );
+
+  // Function to handle the accept button click
+  const handleAcceptRequest = (requestId: number) => {
+    setSelectedRequestId(requestId);
+    setReturnDateDialogOpen(true);
+  };
+
+  // Function to confirm the request acceptance with the selected return date
+  const confirmAcceptRequest = () => {
+    if (selectedRequestId && selectedReturnDate) {
+      acceptRequestMutation.mutate({
+        requestId: selectedRequestId,
+        returnDate: selectedReturnDate
+      });
+      setReturnDateDialogOpen(false);
+    }
+  };
+
   const acceptRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      const res = await apiRequest("POST", `/api/borrow-requests/${requestId}/accept`);
+    mutationFn: async ({ requestId, returnDate }: { requestId: number, returnDate: Date }) => {
+      const res = await apiRequest("POST", `/api/borrow-requests/${requestId}/accept`, { returnDate });
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || "Failed to accept request");
@@ -798,7 +823,7 @@ export default function MyLibrary() {
                             <Button 
                               className="flex-1" 
                               variant="default"
-                              onClick={() => acceptRequestMutation.mutate(request.id)}
+                              onClick={() => handleAcceptRequest(request.id)}
                               disabled={acceptRequestMutation.isPending || declineRequestMutation.isPending}
                             >
                               {acceptRequestMutation.isPending ? (
@@ -874,6 +899,59 @@ export default function MyLibrary() {
         onClose={() => setCameraOpen(false)} 
         onCapture={handleCameraCapture} 
       />
+
+      {/* Return Date Dialog */}
+      <Dialog open={returnDateDialogOpen} onOpenChange={setReturnDateDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Set Return Date</DialogTitle>
+            <DialogDescription>
+              Select when the book should be returned. The borrower will be notified of this date.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="return-date">Return Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="return-date"
+                    variant="outline"
+                    className="justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedReturnDate ? (
+                      format(selectedReturnDate, "PPP")
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedReturnDate}
+                    onSelect={(date) => date && setSelectedReturnDate(date)}
+                    disabled={(date) => date < new Date() || date < new Date(Date.now() + 24 * 60 * 60 * 1000)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-sm text-muted-foreground">
+                Return date must be at least 1 day from now. Default is two weeks.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnDateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmAcceptRequest} disabled={!selectedReturnDate}>
+              Confirm & Accept
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
