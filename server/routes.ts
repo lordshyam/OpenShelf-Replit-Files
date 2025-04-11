@@ -931,30 +931,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    // Get the requested return date from the request body (if provided)
-    const requestedReturnDate = req.body.requestedReturnDate ? new Date(req.body.requestedReturnDate) : undefined;
-    
-    // Create a borrow request with the return date
+    // Create a borrow request (without a return date - owner will set this later)
     const request = await storage.createBorrowRequest({
       bookId,
       requesterId: req.user!.id,
-      requestedReturnDate,
+      // No return date - this will be set by the owner when accepting
     });
 
     // Send a notification to the book owner about the borrow request
     // Get the requester's username for the notification
     const requester = await storage.getUser(req.user!.id);
-    
-    // Format return date information
-    let returnDateInfo = "";
-    if (requestedReturnDate) {
-      const dateFormatter = new Intl.DateTimeFormat('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      returnDateInfo = ` until ${dateFormatter.format(requestedReturnDate)}`;
-    }
     
     // Send the notification to the book owner
     wss.clients.forEach((client) => {
@@ -966,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           requesterId: req.user!.id,
           requesterName: requester ? requester.username : `User #${req.user!.id}`,
           requestId: request.id,
-          message: `${requester ? requester.username : 'Someone'} would like to borrow "${book.title}"${returnDateInfo}. Please review this request in "My Library" → "Borrow Requests".`
+          message: `${requester ? requester.username : 'Someone'} would like to borrow "${book.title}". Please review this request in "My Library" → "Borrow Requests" to set a return date.`
         }));
       }
     });
