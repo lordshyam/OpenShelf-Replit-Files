@@ -43,11 +43,23 @@ export default function MyLibrary() {
     return savedTab || 'listed';
   });
 
+  // Define a type for book search results
+  interface BookSearchResult {
+    id: string;
+    title: string;
+    author: string;
+    description?: string;
+    imageUrl?: string;
+    genre?: string;
+    publishedDate?: string;
+    publisher?: string;
+  }
+  
   // State for book search results
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<BookSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<any | null>(null);
+  const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null);
   
   const form = useForm<InsertBook>({
     resolver: zodResolver(insertBookSchema),
@@ -92,28 +104,36 @@ export default function MyLibrary() {
     }
   };
   
-  // Debounce the search to avoid too many requests
-  const debouncedSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.length < 3) {
+  // Use useEffect with a timeout for debounce
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    // Only search if there's enough text to search
+    if (searchQuery.length < 3) {
       setSearchResults([]);
       return;
     }
     
-    // Clear any pending timeouts
-    // Use a safer approach without window.searchTimeout
-    if (typeof window !== 'undefined') {
-      const timeoutId = setTimeout(() => {
-        searchBooks(query);
-      }, 300); // 300ms delay
-      
-      // Store the current timeout ID for cleanup on next call
-      return () => clearTimeout(timeoutId);
+    // Clear previous timeout if it exists
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
-  };
+    
+    // Set a new timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      searchBooks(searchQuery);
+    }, 300);
+    
+    // Cleanup function to clear timeout on unmount or when searchQuery changes
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]); // Only run when searchQuery changes
   
   // Function to handle selection of a book from search results
-  const handleBookSelect = (book: any) => {
+  const handleBookSelect = (book: BookSearchResult) => {
     setSelectedBook(book);
     setSearchResults([]);
     setSearchQuery("");
@@ -487,7 +507,7 @@ export default function MyLibrary() {
                             id="book-search"
                             placeholder="Enter title, author, or ISBN..."
                             value={searchQuery}
-                            onChange={(e) => debouncedSearch(e.target.value)}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pr-10"
                           />
                           {isSearching && (
