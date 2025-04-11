@@ -8,7 +8,6 @@ import {
   insertCommunitySchema, 
   userPreferencesSchema,
   insertUserReportSchema,
-  User,
   User
 } from "@shared/schema";
 import { z } from "zod";
@@ -1541,7 +1540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin API endpoints
   
   // Check if user is an admin
-  const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const isAdmin = (req: any, res: Response, next: any) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
     if (req.user!.role !== "admin") return res.status(403).json({ error: "Not authorized - Admin access required" });
     next();
