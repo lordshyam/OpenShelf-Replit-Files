@@ -12,10 +12,44 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
+// Added functions for book verification
+async function verifyBookInformation(title: string, author: string): Promise<{ isValid: boolean; error?: string; normalizedTitle: string; normalizedAuthor: string }> {
+  // Replace this with your actual Google Books API call
+  // This is a placeholder for demonstration purposes
+  const normalizedTitle = normalizeText(title);
+  const normalizedAuthor = normalizeText(author);
+
+  // Simulate API call - replace with actual API call
+  const isValid = await simulateGoogleBooksApiCall(normalizedTitle, normalizedAuthor);
+
+  if (isValid) {
+    return { isValid: true, normalizedTitle, normalizedAuthor };
+  } else {
+    return { isValid: false, error: "Book not found in Google Books API", normalizedTitle, normalizedAuthor };
+  }
+}
+
+function normalizeText(text: string): string {
+  // Basic normalization: lowercase, remove extra spaces, trim
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+
+async function simulateGoogleBooksApiCall(title: string, author: string): Promise<boolean> {
+  // Simulate a call to the Google Books API.  Replace this with your actual API call
+  // This example simply returns true for demonstration purposes.
+  // In a real application, you would need to make an actual API call and check the response.
+  // Consider adding error handling and rate limiting.
+
+  //Example using a simple condition for demonstration
+  return title.length > 3 && author.length > 3;
+}
+
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Reset all data on server start for development/testing purposes
   storage.resetEverything();
-  
+
   setupAuth(app);
 
   const httpServer = createServer(app);
@@ -51,25 +85,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ? message.message.substring(0, 50) + '...' 
               : message.message
           });
-          
+
           try {
             // Validate that the user belongs to the community
             const user = await storage.getUser(message.userId);
             if (!user) {
               throw new Error('User not found');
             }
-            
+
             if (user.communityId !== message.communityId) {
               throw new Error('User does not belong to this community');
             }
-            
+
             // Create and save the community chat message
             const chat = await storage.createCommunityChat({
               communityId: message.communityId,
               userId: message.userId,
               message: message.message
             });
-            
+
             console.log('Community chat message saved:', chat.id);
 
             // Send confirmation to the sender
@@ -78,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               chatId: chat.id,
               message: message.message
             }));
-            
+
             // Broadcast the message to all clients except the sender
             wss.clients.forEach((client) => {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -137,53 +171,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update user location
   app.post("/api/user/location", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     // Validate request body
     const locationSchema = z.object({
       state: z.string().min(1, "State is required"),
       city: z.string().min(1, "City is required")
     });
-    
+
     const result = locationSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ message: "Invalid location data", errors: result.error.format() });
     }
-    
+
     // Update user location
     await storage.updateUser(req.user!.id, {
       state: result.data.state,
       city: result.data.city,
       locationVerified: true
     });
-    
+
     // Update session user
     if (req.user) {
       req.user.state = result.data.state;
       req.user.city = result.data.city;
       req.user.locationVerified = true;
     }
-    
+
     res.json({ message: "Location updated successfully" });
   });
-  
+
   // Update user profile
   app.post("/api/user/profile", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     // Validate request body
     const profileSchema = z.object({
       username: z.string().min(3, "Username must be at least 3 characters").optional(),
       state: z.string().min(1, "State is required").optional(),
       city: z.string().min(1, "City is required").optional(),
     });
-    
+
     const result = profileSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ message: "Invalid profile data", errors: result.error.format() });
     }
-    
+
     const updates: Partial<User> = {};
-    
+
     // Only include fields that were provided
     if (result.data.username) updates.username = result.data.username;
     if (result.data.state) {
@@ -194,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       updates.city = result.data.city;
       updates.locationVerified = true;
     }
-    
+
     // Check if username already exists (if changing username)
     if (updates.username) {
       const existingUser = await storage.getUserByUsername(updates.username);
@@ -202,10 +236,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Username already taken" });
       }
     }
-    
+
     // Update user
     await storage.updateUser(req.user!.id, updates);
-    
+
     // Update session user
     if (req.user) {
       if (updates.username) req.user.username = updates.username;
@@ -213,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updates.city) req.user.city = updates.city;
       if (updates.locationVerified) req.user.locationVerified = updates.locationVerified;
     }
-    
+
     res.json({ 
       message: "Profile updated successfully",
       user: req.user
@@ -226,97 +260,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const users = await storage.getUsers();
     res.json(users);
   });
-  
+
   // Community routes
   app.get("/api/communities", async (req, res) => {
     const communities = await storage.getCommunities();
     res.json(communities);
   });
-  
+
   app.get("/api/communities/:id", async (req, res) => {
     const communityId = parseInt(req.params.id);
     const community = await storage.getCommunity(communityId);
-    
+
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     res.json(community);
   });
-  
+
   app.get("/api/communities/:id/members", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.id);
     const members = await storage.getCommunityMembers(communityId);
-    
+
     res.json(members);
   });
-  
+
   app.patch("/api/communities/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.id);
     const community = await storage.getCommunity(communityId);
-    
+
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Only the community creator can update the community
     if (community.createdBy !== req.user!.id) {
       return res.status(403).json({ message: "Only community admins can update the community" });
     }
-    
+
     // Update community visibility
     if (req.body.isPublic !== undefined) {
       community.isPublic = req.body.isPublic;
       await storage.updateCommunity(communityId, { isPublic: req.body.isPublic });
     }
-    
+
     res.json(community);
   });
-  
+
   app.post("/api/communities/:id/remove-member", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.id);
     const userId = parseInt(req.body.userId);
-    
+
     if (!userId) {
       return res.status(400).json({ message: "User ID is required" });
     }
-    
+
     const community = await storage.getCommunity(communityId);
-    
+
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Only the community creator can remove members
     if (community.createdBy !== req.user!.id) {
       return res.status(403).json({ message: "Only community admins can remove members" });
     }
-    
+
     // Can't remove community creator
     if (userId === community.createdBy) {
       return res.status(400).json({ message: "Cannot remove the community admin" });
     }
-    
+
     // Get the user to make sure they're in this community
     const user = await storage.getUser(userId);
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    
+
     if (user.communityId !== communityId) {
       return res.status(400).json({ message: "User is not a member of this community" });
     }
-    
+
     // Update user to remove community
     await storage.updateUser(userId, { communityId: null });
-    
+
     // Add message to community chat
     const leaveChat = await storage.createCommunityChat({
       communityId,
@@ -334,34 +368,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
-    
+
     res.json({ message: "Member removed successfully" });
   });
-  
+
   app.post("/api/communities/:id/leave", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.id);
     const community = await storage.getCommunity(communityId);
-    
+
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Check if user is a member of this community
     if (req.user!.communityId !== communityId) {
       return res.status(400).json({ message: "You are not a member of this community" });
     }
-    
+
     // If community creator is leaving, we might need special handling
     if (community.createdBy === req.user!.id) {
       // For now, we'll just let them leave
       // In a real app, you might want to transfer ownership or delete the community
     }
-    
+
     // Update user to leave community
     await storage.updateUser(req.user!.id, { communityId: null });
-    
+
     // If this wasn't the creator, add a leave message
     if (community.createdBy !== req.user!.id) {
       const leaveChat = await storage.createCommunityChat({
@@ -369,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user!.id,
         message: `${req.user!.username} has left the community.`
       });
-  
+
       // Broadcast the leave message
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -381,7 +415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     res.json({ message: "Left community successfully" });
   });
 
@@ -489,56 +523,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get community join requests
   app.get("/api/communities/:id/join-requests", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.id);
     const community = await storage.getCommunity(communityId);
-    
+
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Only the community creator can view join requests
     if (community.createdBy !== req.user!.id) {
       return res.status(403).json({ message: "Only community admins can view join requests" });
     }
-    
+
     const requests = await storage.getJoinRequests(communityId);
     res.json(requests);
   });
-  
+
   // Accept a join request
   app.post("/api/communities/:communityId/join-requests/:requestId/accept", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.communityId);
     const requestId = parseInt(req.params.requestId);
-    
+
     const community = await storage.getCommunity(communityId);
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Only the community creator can accept join requests
     if (community.createdBy !== req.user!.id) {
       return res.status(403).json({ message: "Only community admins can accept join requests" });
     }
-    
+
     const requests = await storage.getJoinRequests(communityId);
     const request = requests.find(r => r.id === requestId);
-    
+
     if (!request) {
       return res.status(404).json({ message: "Join request not found" });
     }
-    
+
     // Update request status
     await storage.updateJoinRequest(requestId, "accepted");
-    
+
     // Update user's community
     await storage.updateUser(request.userId, { communityId });
-    
+
     // Get the user who requested to join
     const joiningUser = await storage.getUser(request.userId);
-    
+
     if (joiningUser) {
       // Add welcome message to community chat
       const joinChat = await storage.createCommunityChat({
@@ -546,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: joiningUser.id,
         message: `${joiningUser.username} has joined the community!`
       });
-      
+
       // Broadcast the join message
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -555,7 +589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             chat: joinChat,
             communityName: community.name
           }));
-          
+
           // Also notify the user that their request was accepted
           client.send(JSON.stringify({
             type: 'JOIN_REQUEST_ACCEPTED',
@@ -566,37 +600,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     res.json({ message: "Join request accepted" });
   });
-  
+
   // Decline a join request
   app.post("/api/communities/:communityId/join-requests/:requestId/decline", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const communityId = parseInt(req.params.communityId);
     const requestId = parseInt(req.params.requestId);
-    
+
     const community = await storage.getCommunity(communityId);
     if (!community) {
       return res.status(404).json({ message: "Community not found" });
     }
-    
+
     // Only the community creator can decline join requests
     if (community.createdBy !== req.user!.id) {
       return res.status(403).json({ message: "Only community admins can decline join requests" });
     }
-    
+
     const requests = await storage.getJoinRequests(communityId);
     const request = requests.find(r => r.id === requestId);
-    
+
     if (!request) {
       return res.status(404).json({ message: "Join request not found" });
     }
-    
+
     // Update request status
     await storage.updateJoinRequest(requestId, "declined");
-    
+
     // Notify the user that their request was declined
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
@@ -608,7 +642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
-    
+
     res.json({ message: "Join request declined" });
   });
 
@@ -620,12 +654,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all chats where the user is either the sender or receiver
       const userId = req.user!.id;
       const chats = await storage.getChats(userId);
-      
+
       // Sort chats by timestamp
       const sortedChats = chats.sort((a, b) => 
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
-      
+
       res.json(sortedChats);
     } catch (error) {
       console.error('Error fetching chats:', error);
@@ -639,12 +673,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const communityId = parseInt(req.params.communityId);
     const chats = await storage.getCommunityChats(communityId);
-    
+
     // Sort chats by timestamp
     const sortedChats = chats.sort((a, b) => 
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
-    
+
     res.json(sortedChats);
   });
 
@@ -665,7 +699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/books", async (req, res) => {
     let books = await storage.getBooks();
     let bookOwners: Map<number, User> = new Map();
-    
+
     // If communityId is provided, filter by it
     if (req.query.communityId) {
       const communityId = parseInt(req.query.communityId as string);
@@ -676,12 +710,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.query.availableOnly === "true") {
       books = books.filter(book => !book.borrowed);
     }
-    
+
     // Don't show unlisted books (except to the owner)
     if (req.isAuthenticated() && req.user?.id) {
       // For authenticated users, only hide unlisted books that they don't own
       books = books.filter(book => !book.unlisted || book.ownerId === req.user!.id);
-      
+
       // Apply location-based filtering (if user has a verified location)
       if (req.user.locationVerified && req.user.state && req.user.city) {
         // Get all book owners' data for location matching
@@ -690,7 +724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const owner = await storage.getUser(book.ownerId);
             if (owner) {
               bookOwners.set(book.ownerId, owner);
-              
+
               // Add owner location info to the book for frontend display
               (book as any).ownerCity = owner.city;
               (book as any).ownerState = owner.state;
@@ -704,7 +738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        
+
         // Sort books by location proximity:
         // 1. Books in same city first
         // 2. Books in same state next
@@ -712,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         books.sort((a, b) => {
           const ownerA = bookOwners.get(a.ownerId);
           const ownerB = bookOwners.get(b.ownerId);
-          
+
           // If both owners have verified locations
           if (ownerA?.locationVerified && ownerB?.locationVerified) {
             // If a is in same city but b isn't
@@ -735,7 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           }
-          
+
           // Default case: no sorting change
           return 0;
         });
@@ -761,15 +795,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json(result.error);
       }
 
-      // Check for duplicate books
+      // Verify book information with Google Books API
+      const verification = await verifyBookInformation(result.data.title, result.data.author);
+
+      if (!verification.isValid) {
+        return res.status(400).json({ 
+          message: verification.error || "Invalid book information",
+          details: "Please ensure you're listing a real book with accurate information"
+        });
+      }
+
+      // Check for duplicate books using normalized text
       const existingBooks = await storage.getBooks();
-      
-      // Check for duplicates - consider only non-unlisted books
-      const isDuplicate = existingBooks.some(book =>
+
+      // Check for duplicates using normalized text comparison
+      const isDuplicate = existingBooks.some(book => 
         book.ownerId === req.user!.id &&
         !book.unlisted && // Make sure we only check active (non-unlisted) books
-        book.title.toLowerCase() === result.data.title.toLowerCase() &&
-        book.author.toLowerCase() === result.data.author.toLowerCase()
+        (
+          // Check normalized versions of title and author
+          verification.normalizedTitle === normalizeText(book.title) &&
+          verification.normalizedAuthor === normalizeText(book.author)
+        )
       );
 
       if (isDuplicate) {
@@ -778,15 +825,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get user to check community membership
       const user = await storage.getUser(req.user!.id);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       if (!user.communityId) {
         return res.status(400).json({ message: "Please join a community before adding books" });
       }
-      
+
       const book = await storage.createBook({
         ...result.data,
         ownerId: req.user!.id,
@@ -798,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found after book creation" });
       }
-      
+
       // We need to work with integers for database compatibility
       // Store credits as integers internally (1 = 0.5 credits in display)
       const creditsToAdd = 1; // This represents 0.5 credits to the user
@@ -822,21 +869,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
         }
       });
-      
+
       try {
         // Get community info
         const community = await storage.getCommunity(user.communityId!);
-        
+
         if (community) {
           // Create a notification message in the community chat
           const bookInfoMessage = `${user.username} has listed a new book: "${book.title}" by ${book.author}. ${book.description ? `Description: ${book.description}` : ''} ${book.condition ? `Condition: ${book.condition}` : ''}`;
-          
+
           const communityChat = await storage.createCommunityChat({
             communityId: user.communityId!,
             userId: 0, // System message (OpenShelf)
             message: bookInfoMessage
           });
-          
+
           // Broadcast the community message about the new book
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
@@ -865,34 +912,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Borrow requests
   app.get("/api/borrow-requests", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     try {
       // Get all borrow requests related to the current user
       // This includes both requests they've made and requests for their books
       const requests = await storage.getBorrowRequests(req.user!.id);
-      
+
       // Get all books to ensure we can also identify borrow requests 
       // where the user is the owner of the requested book
       const books = await storage.getBooks();
       const ownedBookIds = books
         .filter(book => book.ownerId === req.user!.id)
         .map(book => book.id);
-        
+
       // Get other requests where user is the book owner
       const allRequests = await storage.getAllBorrowRequests();
       const ownedBookRequests = allRequests.filter(req => 
         ownedBookIds.includes(req.bookId)
       );
-      
+
       // Combine both sets of requests (deduplicate by ID)
       const combinedRequests = [...requests];
-      
+
       for (const req of ownedBookRequests) {
         if (!combinedRequests.some(r => r.id === req.id)) {
           combinedRequests.push(req);
         }
       }
-      
+
       res.json(combinedRequests);
     } catch (error) {
       console.error("Error fetching borrow requests:", error);
@@ -910,7 +957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!book) return res.status(404).send("Book not found");
     if (book.borrowed) return res.status(400).send("Book already borrowed");
-    
+
     // Ensure user has exactly 1.0 credits (internal value: 2) for borrowing
     if (req.user!.credits < 2) {
       return res.status(400).json({
@@ -919,11 +966,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requiredCredits: 1.0
       });
     }
-    
+
     // Check if user has any unreturned books
     const borrowedBooks = await storage.getBooksByBorrower(req.user!.id);
     const unreturned = borrowedBooks.filter(b => b.borrowed && !b.returned);
-    
+
     if (unreturned.length > 0) {
       return res.status(400).json({ 
         message: "You have unreturned books. Please return them before borrowing new ones.",
@@ -941,7 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Send a notification to the book owner about the borrow request
     // Get the requester's username for the notification
     const requester = await storage.getUser(req.user!.id);
-    
+
     // Send the notification to the book owner
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
@@ -979,16 +1026,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Get all pending requests for this book
     const allRequests = (await storage.getBorrowRequests(req.user!.id))
       .filter(r => r.bookId === book.id && r.status === "pending");
-    
+
     // Get any custom return date set by the owner when accepting the request
     const ownerSetReturnDate = req.body.returnDate ? new Date(req.body.returnDate) : null;
-    
+
     // Default return date is two weeks from now if none is specified
     const twoWeeksFromNow = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 2 weeks
-    
+
     // Determine which return date to use (priority: owner-set > requester-set > default)
     const finalReturnDate = ownerSetReturnDate || request.requestedReturnDate || twoWeeksFromNow;
-    
+
     // Update the request with the return date
     await storage.updateBorrowRequest(
       requestId, 
@@ -1038,15 +1085,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
     });
-    
+
     // Handle other pending requests for this book (auto-decline)
     for (const otherRequest of allRequests) {
       // Skip the accepted request
       if (otherRequest.id === requestId) continue;
-      
+
       // Update the request status
       await storage.updateBorrowRequest(otherRequest.id, "declined");
-      
+
       // Send a message from OpenShelf (system) to the requester
       const systemMessage = await storage.createChat({
         senderId: 0, // Using 0 as system/OpenShelf ID
@@ -1054,7 +1101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `Your request to borrow "${book.title}" was automatically declined because the book was borrowed by someone else.`,
         bookId: book.id,
       });
-      
+
       // Broadcast the system notification
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -1128,7 +1175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (book.borrowerId !== req.user!.id) return res.status(403).json({ message: "This is not your borrowed book" });
 
     const isReturned = req.body.returned === true;
-    
+
     // Update the book's return status
     const updatedBook = await storage.updateBook(bookId, {
       returned: isReturned
@@ -1157,7 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json(updatedBook);
   });
-  
+
   // Endpoint for owner to confirm return and complete the return process
   app.post("/api/books/:id/confirm-return", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -1173,7 +1220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Get the borrower info for later use
     const borrower = await storage.getUser(book.borrowerId!);
-    
+
     // Complete the return process and reset the borrow status
     const updatedBook = await storage.updateBook(bookId, {
       borrowed: false,
@@ -1187,7 +1234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return 1.0 credits (internal value: 2)
       const newCredits = borrower.credits + 2;
       await storage.updateUserCredits(borrower.id, newCredits);
-      
+
       // Send credit update notification
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -1221,7 +1268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json(updatedBook);
   });
-  
+
   // Endpoint for early return request
   app.post("/api/books/:id/return-early", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -1261,30 +1308,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json(updatedBook);
   });
-  
+
   // Toggle a book's unlisted status
   app.post("/api/books/:id/toggle-visibility", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const bookId = parseInt(req.params.id);
     const book = await storage.getBooks().then(books =>
       books.find(b => b.id === bookId)
     );
-    
+
     if (!book) return res.status(404).json({ message: "Book not found" });
     if (book.ownerId !== req.user!.id) return res.status(403).json({ message: "Not your book" });
-    
+
     // If the book is borrowed, it cannot be unlisted
     if (book.borrowed && !book.unlisted) {
       return res.status(400).json({ 
         message: "Cannot unlist a book that is currently borrowed" 
       });
     }
-    
+
     // Toggle the visibility
     const unlisted = !book.unlisted;
     const updatedBook = await storage.updateBook(bookId, { unlisted });
-    
+
     // Update the user's credits based on unlisted status
     try {
       // Get latest user data to ensure we have current credits
@@ -1297,15 +1344,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Using 1 as the credits delta (represents 0.5 credits to the user)
         const creditsDelta = unlisted ? -1 : 1;
         const newCreditBalance = user.credits + creditsDelta;
-        
+
         // Update user's credits
         await storage.updateUserCredits(user.id, newCreditBalance);
-        
+
         // Update session
         if (req.user) {
           req.user.credits = newCreditBalance;
         }
-        
+
         // Broadcast credit update through WebSocket
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
@@ -1316,7 +1363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }));
           }
         });
-        
+
         // Add a notification in community chat
         const action = unlisted ? "unlisted" : "relisted";
         const creditsAction = unlisted ? "lost" : "gained back";
@@ -1325,7 +1372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: 0, // System message
           message: `${user.username} has ${action} their book "${book.title}" and ${creditsAction} 0.5 credits.`
         });
-        
+
         // Get community for notification
         const community = await storage.getCommunity(user.communityId!);
         if (community) {
@@ -1345,7 +1392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error updating credits when toggling book visibility:", error);
       // We still return the updated book even if credit update fails
     }
-    
+
     res.json(updatedBook);
   });
 
@@ -1356,32 +1403,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const db = require("../db");
         console.log("Resetting database tables...");
-        
+
         // Truncate all user-related tables
         await db.pool.query("TRUNCATE TABLE users CASCADE;");
         await db.pool.query("TRUNCATE TABLE session CASCADE;");
-        
+
         // Reset borrow information in books
         await db.pool.query("UPDATE books SET borrowed = false, borrower_id = NULL, borrow_deadline = NULL;");
-        
+
         // Truncate borrow requests
         await db.pool.query("TRUNCATE TABLE \"borrowRequests\" CASCADE;");
-        
+
         // Truncate community join requests
         await db.pool.query("TRUNCATE TABLE community_join_requests CASCADE;");
-        
+
         // Community membership reset
         await db.pool.query("UPDATE users SET community_id = NULL;");
-        
+
         console.log("Database tables reset successfully");
       } catch (dbError) {
         console.error("Database reset error or using in-memory storage only:", dbError);
       }
-      
+
       // Now reset the in-memory storage
       console.log("Resetting in-memory storage...");
       storage.resetAllData();
-      
+
       // Destroy all sessions
       if (req.session) {
         req.session.destroy((err) => {
@@ -1390,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
       }
-      
+
       res.status(200).json({ success: true, message: "All data has been reset" });
     } catch (error) {
       console.error("Error resetting data:", error);
@@ -1414,20 +1461,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Make sure the current user is the reporter
       req.body.reporterId = req.user!.id;
-      
+
       // Parse and validate the report data
       const reportData = insertUserReportSchema.parse(req.body);
-      
+
       // Create the report
       const report = await storage.createUserReport(reportData);
-      
+
       // Send notification to the reported user
       const systemMessage = await storage.createChat({
         senderId: 0, // System user ID
         receiverId: reportData.reportedUserId,
         message: `A user has reported an issue regarding ${reportData.reportType.replace(/_/g, ' ')}. Our moderation team will review the report.`,
       });
-      
+
       // Notify admin (via WebSocket)
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -1437,7 +1484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
         }
       });
-      
+
       res.status(201).json(report);
     } catch (error) {
       res.status(400).json({ message: (error as Error).message });
@@ -1447,17 +1494,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update report status (for admins)
   app.patch("/api/user-reports/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     // In a real app, check if user is admin
     // if (!req.user!.isAdmin) return res.sendStatus(403);
-    
+
     const id = parseInt(req.params.id);
     const { status } = req.body;
-    
+
     if (!status || !['pending', 'reviewed', 'dismissed', 'actioned'].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
-    
+
     try {
       await storage.updateUserReportStatus(id, status);
       res.json({ success: true });
@@ -1478,16 +1525,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       new Date(book.borrowDeadline) < now && 
       !book.returned
     );
-    
+
     // Process each overdue book
     for (const book of overdueBooks) {
       if (!book.borrowerId) continue;
-      
+
       const owner = await storage.getUser(book.ownerId);
       const borrower = await storage.getUser(book.borrowerId);
-      
+
       if (!owner || !borrower) continue;
-      
+
       // Create reminder chat message
       await storage.createChat({
         senderId: 0, // System
@@ -1495,10 +1542,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `REMINDER: "${book.title}" is overdue for return. Please return it to ${owner.username} as soon as possible or contact them to make arrangements.`,
         bookId: book.id,
       });
-      
+
       // Send email (mock - would be implemented in production)
       console.log(`OVERDUE BOOK REMINDER EMAIL to ${borrower.email} about "${book.title}"`);
-      
+
       // Notify via WebSocket for real-time updates
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -1510,7 +1557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     res.json({ 
       checked: books.length,
       overdue: overdueBooks.length,
@@ -1524,14 +1571,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin API endpoints
-  
+
   // Check if user is an admin
   const isAdmin = (req: any, res: Response, next: any) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
     if (req.user!.role !== "admin") return res.status(403).json({ error: "Not authorized - Admin access required" });
     next();
   };
-  
+
   // Get admin stats
   app.get("/api/admin/stats", isAdmin, async (req, res) => {
     try {
@@ -1541,18 +1588,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const communities = await storage.getCommunities();
       const borrowRequests = await storage.getAllBorrowRequests();
       const userReports = await storage.getUserReports();
-      
+
       const activeUsers = users.filter(u => u.status === "active" || !u.status).length;
       const suspendedUsers = users.filter(u => u.status === "suspended").length;
       const bannedUsers = users.filter(u => u.status === "banned").length;
-      
+
       const availableBooks = books.filter(b => !b.borrowed && !b.unlisted).length;
       const borrowedBooks = books.filter(b => b.borrowed).length;
       const unlistedBooks = books.filter(b => b.unlisted).length;
-      
+
       const pendingRequests = borrowRequests.filter(r => r.status === "pending").length;
       const pendingReports = userReports.filter(r => r.status === "pending").length;
-      
+
       res.json({
         users: {
           total: users.length,
@@ -1579,7 +1626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to get admin statistics" });
     }
   });
-  
+
   // Get all users
   app.get("/api/admin/users", isAdmin, async (req, res) => {
     try {
@@ -1590,26 +1637,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to get users" });
     }
   });
-  
+
   // Update user status or role
   app.patch("/api/admin/users/:userId", isAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
       const { status, role } = req.body;
-      
+
       if (!userId) {
         return res.status(400).json({ error: "Invalid user ID" });
       }
-      
+
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       const updates: Partial<User> = {};
       if (status) updates.status = status;
       if (role) updates.role = role;
-      
+
       await storage.updateUser(userId, updates);
       res.json({ success: true });
     } catch (error) {
@@ -1617,42 +1664,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update user" });
     }
   });
-  
+
   // Get all books with detailed info
   app.get("/api/admin/books", isAdmin, async (req, res) => {
     try {
       const books = await storage.getBooks();
       const users = await storage.getUsers();
-      
+
       // Enhance books with owner and borrower info
       const enhancedBooks = books.map(book => {
         const owner = users.find(user => user.id === book.ownerId);
         const borrower = book.borrowerId ? users.find(user => user.id === book.borrowerId) : null;
-        
+
         return {
           ...book,
           ownerUsername: owner?.username || "Unknown",
           borrowerUsername: borrower?.username || null
         };
       });
-      
+
       res.json(enhancedBooks);
     } catch (error) {
       console.error("Error getting books:", error);
       res.status(500).json({ error: "Failed to get books" });
     }
   });
-  
+
   // Update book (unlist, remove)
   app.patch("/api/admin/books/:bookId", isAdmin, async (req, res) => {
     try {
       const bookId = parseInt(req.params.bookId);
       const { unlisted } = req.body;
-      
+
       if (!bookId) {
         return res.status(400).json({ error: "Invalid book ID" });
       }
-      
+
       const book = await storage.updateBook(bookId, { unlisted });
       res.json({ success: true, book });
     } catch (error) {
@@ -1660,16 +1707,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update book" });
     }
   });
-  
+
   // Delete book
   app.delete("/api/admin/books/:bookId", isAdmin, async (req, res) => {
     try {
       const bookId = parseInt(req.params.bookId);
-      
+
       if (!bookId) {
         return res.status(400).json({ error: "Invalid book ID" });
       }
-      
+
       await storage.deleteBook(bookId);
       res.json({ success: true });
     } catch (error) {
@@ -1677,72 +1724,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete book" });
     }
   });
-  
+
   // Get all communities with member counts
   app.get("/api/admin/communities", isAdmin, async (req, res) => {
     try {
       const communities = await storage.getCommunities();
       const users = await storage.getUsers();
-      
+
       const enhancedCommunities = await Promise.all(communities.map(async community => {
         const members = users.filter(user => user.communityId === community.id);
         const creator = users.find(user => user.id === community.createdBy);
-        
+
         return {
           ...community,
           memberCount: members.length,
           creatorUsername: creator?.username || "Unknown"
         };
       }));
-      
+
       res.json(enhancedCommunities);
     } catch (error) {
       console.error("Error getting communities:", error);
       res.status(500).json({ error: "Failed to get communities" });
     }
   });
-  
+
   // Delete community
   app.delete("/api/admin/communities/:communityId", isAdmin, async (req, res) => {
     try {
       const communityId = parseInt(req.params.communityId);
-      
+
       if (!communityId) {
         return res.status(400).json({ error: "Invalid community ID" });
       }
-      
+
       // Get all users in this community
       const users = await storage.getUsers();
       const communityUsers = users.filter(user => user.communityId === communityId);
-      
+
       // Remove all users from the community
       for (const user of communityUsers) {
         await storage.updateUser(user.id, { communityId: null });
       }
-      
+
       // Update community in database
       await storage.updateCommunity(communityId, { isPublic: false });
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting community:", error);
       res.status(500).json({ error: "Failed to delete community" });
     }
   });
-  
+
   // Get all user reports for admin
   app.get("/api/admin/reports", isAdmin, async (req, res) => {
     try {
       const reports = await storage.getUserReports();
       const users = await storage.getUsers();
       const books = await storage.getBooks();
-      
+
       // Enhance reports with username info
       const enhancedReports = reports.map(report => {
         const reporter = users.find(user => user.id === report.reporterId);
         const reportedUser = users.find(user => user.id === report.reportedUserId);
         const book = report.bookId ? books.find(book => book.id === report.bookId) : null;
-        
+
         return {
           ...report,
           reporterUsername: reporter?.username || "Unknown",
@@ -1750,24 +1797,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bookTitle: book?.title || null
         };
       });
-      
+
       res.json(enhancedReports);
     } catch (error) {
       console.error("Error getting reports:", error);
       res.status(500).json({ error: "Failed to get reports" });
     }
   });
-  
+
   // Update report status
   app.patch("/api/admin/reports/:reportId", isAdmin, async (req, res) => {
     try {
       const reportId = parseInt(req.params.reportId);
       const { status } = req.body;
-      
+
       if (!reportId) {
         return res.status(400).json({ error: "Invalid report ID" });
       }
-      
+
       await storage.updateUserReportStatus(reportId, status);
       res.json({ success: true });
     } catch (error) {
@@ -1775,7 +1822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update report" });
     }
   });
-  
+
   // Modify the reset endpoint to require admin
   app.post("/api/reset-data", isAdmin, async (req, res) => {
     try {
@@ -1783,32 +1830,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const db = require("../db");
         console.log("Resetting database tables...");
-        
+
         // Truncate all user-related tables
         await db.pool.query("TRUNCATE TABLE users CASCADE;");
         await db.pool.query("TRUNCATE TABLE session CASCADE;");
-        
+
         // Reset borrow information in books
         await db.pool.query("UPDATE books SET borrowed = false, borrower_id = NULL, borrow_deadline = NULL;");
-        
+
         // Truncate borrow requests
         await db.pool.query("TRUNCATE TABLE \"borrowRequests\" CASCADE;");
-        
+
         // Truncate community join requests
         await db.pool.query("TRUNCATE TABLE community_join_requests CASCADE;");
-        
+
         // Community membership reset
         await db.pool.query("UPDATE users SET community_id = NULL;");
-        
+
         console.log("Database tables reset successfully");
       } catch (dbError) {
         console.error("Database reset error or using in-memory storage only:", dbError);
       }
-      
+
       // Now reset the in-memory storage
       console.log("Resetting in-memory storage...");
       storage.resetAllData();
-      
+
       // Destroy all sessions
       if (req.session) {
         req.session.destroy((err) => {
@@ -1817,7 +1864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
       }
-      
+
       res.json({ success: true, message: "All data has been reset" });
     } catch (error) {
       console.error("Error resetting data:", error);
