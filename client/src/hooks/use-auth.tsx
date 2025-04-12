@@ -22,6 +22,7 @@ type AuthContextType = {
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
   verificationInfo: VerificationInfo | null;
+  clearVerificationInfo: () => void;
 };
 
 type LoginData = {
@@ -145,6 +146,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  // Function to clear verification info
+  const clearVerificationInfo = () => {
+    setVerificationInfo(null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -155,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logoutMutation,
         registerMutation,
         verificationInfo,
+        clearVerificationInfo,
       }}
     >
       {children}

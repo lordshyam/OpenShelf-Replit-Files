@@ -48,7 +48,7 @@ interface LegacyVerificationFormData {
 }
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user, loginMutation, registerMutation, verificationInfo, clearVerificationInfo } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
@@ -209,8 +209,34 @@ export default function AuthPage() {
     }
   }, [loginMutation.isError, loginMutation.error, toast, verificationForm, resendForm, legacyVerificationForm]);
 
+  // Function to clear verification info and close dialog
+  const handleVerificationClose = () => {
+    clearVerificationInfo();
+    setShowVerification(false);
+  };
+  
+  // Handle successful verification
+  const handleVerificationSuccess = () => {
+    toast({
+      title: "Email verified successfully",
+      description: "You can now log in to your account."
+    });
+    clearVerificationInfo();
+    setShowVerification(false);
+  };
+
   return (
     <div className="min-h-screen grid md:grid-cols-2 gap-6 p-4 bg-background">
+      {/* Add our new verification dialog using the context state */}
+      {verificationInfo && verificationInfo.needsVerification && (
+        <EmailVerificationDialog 
+          isOpen={!!verificationInfo}
+          onClose={handleVerificationClose}
+          email={verificationInfo.email}
+          onVerified={handleVerificationSuccess}
+        />
+      )}
+      
       <div className="flex items-center justify-center">
         {showVerification ? (
           <Card className="w-full max-w-md">
