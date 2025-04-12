@@ -37,13 +37,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/login", credentials);
+        const data = await res.json();
+        
+        // Check if response contains needsVerification flag, indicating email needs verification
+        if (res.status === 401 && data.needsVerification) {
+          throw new Error(JSON.stringify({
+            message: data.message || "Email verification required",
+            needsVerification: true,
+            email: data.email
+          }));
+        }
+        
+        if (!res.ok) {
+          throw new Error(data.message || "Login failed");
+        }
+        
+        return data;
+      } catch (err: any) {
+        // Rethrow special errors we created above
+        if (err.message && err.message.startsWith('{"message":')) {
+          throw err;
+        }
+        // Otherwise throw a generic error
+        throw new Error(err.message || "Login failed");
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
+      try {
+        // Check if the error is a structured verification error
+        const errorData = JSON.parse(error.message);
+        if (errorData.needsVerification) {
+          // Use toast for verification notification but don't mark as destructive
+          toast({
+            title: "Email verification required",
+            description: errorData.message || "Please verify your email to continue",
+          });
+          // Don't display an additional error toast
+          return;
+        }
+      } catch (e) {
+        // Not a structured error, continue with normal error toast
+      }
+      
+      // Display normal error toast
       toast({
         title: "Login failed",
         description: error.message,

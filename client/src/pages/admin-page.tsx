@@ -117,15 +117,20 @@ export default function AdminPage() {
   const { data: adminStats, isLoading: statsLoading, refetch: refetchStats } = useQuery<AdminStats>({
     queryKey: ['/api/admin/stats'],
     queryFn: async () => {
+      console.log('Fetching admin dashboard stats');
       const response = await fetch('/api/admin/stats');
       if (!response.ok) {
-        throw new Error('Failed to fetch admin stats');
+        const errorText = await response.text();
+        console.error('Admin stats fetch error:', response.status, errorText);
+        throw new Error(`Failed to fetch admin stats: ${response.status} ${errorText}`);
       }
       return response.json();
     },
     refetchOnWindowFocus: true,
     refetchOnMount: true,
-    staleTime: 0, // Consider data always stale to ensure fresh data
+    staleTime: 5000, // Consider data fresh for 5 seconds
+    retry: 3, // Retry failed requests 3 times
+    refetchInterval: activeTab === 'overview' ? 10000 : false, // Auto-refresh every 10 seconds when on overview tab
   });
 
   // Query for users list
