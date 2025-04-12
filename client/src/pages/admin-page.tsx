@@ -123,20 +123,28 @@ export default function AdminPage() {
       }
       return response.json();
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0, // Consider data always stale to ensure fresh data
   });
 
   // Query for users list
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
     queryFn: async () => {
+      console.log('Fetching users for admin dashboard');
       const response = await fetch('/api/admin/users');
       if (!response.ok) {
-        throw new Error('Failed to fetch users');
+        const errorText = await response.text();
+        console.error('Admin user fetch error:', response.status, errorText);
+        throw new Error(`Failed to fetch users: ${response.status} ${errorText}`);
       }
       return response.json();
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
     enabled: activeTab === 'users',
   });
 
@@ -144,13 +152,19 @@ export default function AdminPage() {
   const { data: books, isLoading: booksLoading, refetch: refetchBooks } = useQuery<Book[]>({
     queryKey: ['/api/admin/books'],
     queryFn: async () => {
+      console.log('Fetching books for admin dashboard');
       const response = await fetch('/api/admin/books');
       if (!response.ok) {
-        throw new Error('Failed to fetch books');
+        const errorText = await response.text();
+        console.error('Admin books fetch error:', response.status, errorText);
+        throw new Error(`Failed to fetch books: ${response.status} ${errorText}`);
       }
       return response.json();
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
     enabled: activeTab === 'books',
   });
 
@@ -158,13 +172,19 @@ export default function AdminPage() {
   const { data: communities, isLoading: communitiesLoading, refetch: refetchCommunities } = useQuery<Community[]>({
     queryKey: ['/api/admin/communities'],
     queryFn: async () => {
+      console.log('Fetching communities for admin dashboard');
       const response = await fetch('/api/admin/communities');
       if (!response.ok) {
-        throw new Error('Failed to fetch communities');
+        const errorText = await response.text();
+        console.error('Admin communities fetch error:', response.status, errorText);
+        throw new Error(`Failed to fetch communities: ${response.status} ${errorText}`);
       }
       return response.json();
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
     enabled: activeTab === 'communities',
   });
 
@@ -172,13 +192,19 @@ export default function AdminPage() {
   const { data: reports, isLoading: reportsLoading, refetch: refetchReports } = useQuery<UserReport[]>({
     queryKey: ['/api/admin/reports'],
     queryFn: async () => {
+      console.log('Fetching reports for admin dashboard');
       const response = await fetch('/api/admin/reports');
       if (!response.ok) {
-        throw new Error('Failed to fetch reports');
+        const errorText = await response.text();
+        console.error('Admin reports fetch error:', response.status, errorText);
+        throw new Error(`Failed to fetch reports: ${response.status} ${errorText}`);
       }
       return response.json();
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
     enabled: activeTab === 'reports',
   });
 
@@ -193,7 +219,20 @@ export default function AdminPage() {
   // Update URL hash when tab changes
   useEffect(() => {
     window.location.hash = activeTab;
-  }, [activeTab]);
+    
+    // Trigger data refetch when tab changes
+    if (activeTab === 'dashboard') {
+      refetchStats();
+    } else if (activeTab === 'users') {
+      refetchUsers();
+    } else if (activeTab === 'books') {
+      refetchBooks();
+    } else if (activeTab === 'communities') {
+      refetchCommunities();
+    } else if (activeTab === 'reports') {
+      refetchReports();
+    }
+  }, [activeTab, refetchStats, refetchUsers, refetchBooks, refetchCommunities, refetchReports]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
