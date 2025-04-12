@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
+import { EmailVerificationDialog } from "@/components/email-verification-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema, verifyEmailSchema, type InsertUser } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

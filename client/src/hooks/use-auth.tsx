@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useState } from "react";
 import {
   useQuery,
   useMutation,
@@ -8,6 +8,12 @@ import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+type VerificationInfo = {
+  email: string;
+  needsVerification: boolean;
+  message?: string;
+};
+
 type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
@@ -15,6 +21,7 @@ type AuthContextType = {
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  verificationInfo: VerificationInfo | null;
 };
 
 type LoginData = {
@@ -26,6 +33,7 @@ type LoginData = {
 export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [verificationInfo, setVerificationInfo] = useState<VerificationInfo | null>(null);
   const {
     data: user,
     error,
@@ -72,6 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check if the error is a structured verification error
         const errorData = JSON.parse(error.message);
         if (errorData.needsVerification) {
+          // Set verification info to trigger dialog
+          setVerificationInfo({
+            email: errorData.email,
+            needsVerification: true,
+            message: errorData.message || "Please verify your email to continue"
+          });
+          
           // Use toast for verification notification but don't mark as destructive
           toast({
             title: "Email verification required",
@@ -139,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        verificationInfo,
       }}
     >
       {children}
