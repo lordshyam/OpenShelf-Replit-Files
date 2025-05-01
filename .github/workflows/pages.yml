@@ -1,0 +1,27 @@
+name: pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (no submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false    # ← skip any submodules so it won’t try ‘OpenShelf’
+          fetch-depth: 0
+
+      - name: Deploy to GitHub Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload files
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: .             # “.” means upload everything in the root (where index.html lives)
+
+      - name: Deploy
+        uses: actions/deploy-pages@v1
