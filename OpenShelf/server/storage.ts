@@ -1,0 +1,1131 @@
+import { 
+  User, Book, Chat, BorrowRequest, InsertUser, InsertBook, 
+  InsertChat, InsertBorrowRequest, UserPreferences, Community, 
+  CommunityJoinRequest, CommunityChat, InsertCommunity, 
+  InsertCommunityJoinRequest, InsertCommunityChat, UserReport,
+  InsertUserReport
+} from "@shared/schema";
+import * as schema from "@shared/schema";
+import { eq, inArray } from "drizzle-orm";
+import { db, pool, executeDbOperation } from "./db";
+import { getRandomAvatar } from "@shared/avatars";
+import session from "express-session";
+import memorystore from "memorystore";
+
+// Create the memory store for session management
+const MemoryStore = memorystore(session);
+
+export interface IStorage {
+  // User operations
+  getUsers(): Promise<User[]>;
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, updates: Partial<User>): Promise<void>;
+  updateUserCredits(userId: number, credits: number): Promise<void>;
+  updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void>;
+  deleteUser(id: number): Promise<void>;
+  
+  // User reports
+  getUserReports(): Promise<UserReport[]>;
+  getUserReportsByReporter(reporterId: number): Promise<UserReport[]>;
+  getUserReportsByReported(reportedUserId: number): Promise<UserReport[]>;
+  createUserReport(report: InsertUserReport): Promise<UserReport>;
+  updateUserReportStatus(id: number, status: string): Promise<void>;
+
+  // Book operations
+  getBooks(): Promise<Book[]>;
+  getBooksByOwner(ownerId: number): Promise<Book[]>;
+  getBooksByBorrower(borrowerId: number): Promise<Book[]>;
+  getBooksByCommunity(communityId: number): Promise<Book[]>;
+  createBook(book: InsertBook): Promise<Book>;
+  updateBook(id: number, updates: Partial<Book>): Promise<Book>;
+  deleteBook(id: number): Promise<void>;
+
+  // Community operations
+  getCommunities(): Promise<Community[]>;
+  getCommunity(id: number): Promise<Community | undefined>;
+  createCommunity(community: InsertCommunity): Promise<Community>;
+  updateCommunity(id: number, updates: Partial<Community>): Promise<void>;
+  getCommunityMembers(communityId: number): Promise<User[]>;
+
+  // Community join requests
+  getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]>;
+  createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest>;
+  updateJoinRequest(id: number, status: string): Promise<void>;
+
+  // Community chat
+  getCommunityChats(communityId: number): Promise<CommunityChat[]>;
+  createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat>;
+
+  // Borrow and chat operations
+  getBorrowRequests(userId: number): Promise<BorrowRequest[]>;
+  getAllBorrowRequests(): Promise<BorrowRequest[]>; // New method to get all borrow requests
+  createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest>;
+  updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void>; // Updated with optional returnDate
+  getChats(userId: number): Promise<Chat[]>;
+  createChat(chat: InsertChat): Promise<Chat>;
+  
+  // Data management
+  resetAllData(): void;
+  resetEverything(): void;
+
+  sessionStore: any; // Use 'any' for the session store to avoid type issues
+}
+
+export class MemStorage implements IStorage {
+  private users!: Map<number, User>;
+  private books!: Map<number, Book>;
+  private chats!: Map<number, Chat>;
+  private borrowRequests!: Map<number, BorrowRequest>;
+  private communities!: Map<number, Community>;
+  private communityJoinRequests!: Map<number, CommunityJoinRequest>;
+  private communityChats!: Map<number, CommunityChat>;
+  private userReports!: Map<number, UserReport>;
+  private currentId!: number;
+  sessionStore!: any; // Use 'any' for the session store to avoid type issues
+
+  constructor() {
+    this.resetAllData();
+  }
+  
+  resetAllData(): void {
+    console.log("Performing complete memory storage reset for user data...");
+    
+    // Completely reset all user accounts
+    this.users = new Map();
+    
+    // Clear all borrow requests since they're tied to users
+    this.borrowRequests = new Map();
+    
+    // Clear all community join requests since they're tied to users
+    this.communityJoinRequests = new Map();
+    
+    // Clear all user reports
+    this.userReports = new Map();
+    
+    // Initialize maps if they don't exist
+    if (!this.books) {
+      this.books = new Map();
+    }
+    
+    if (!this.chats) {
+      this.chats = new Map();
+    }
+    
+    if (!this.communities) {
+      this.communities = new Map();
+    }
+    
+    if (!this.communityChats) {
+      this.communityChats = new Map();
+    }
+    
+    // Update books to remove borrower information
+    if (this.books && this.books.size > 0) {
+      console.log(`Resetting borrow status for ${this.books.size} books...`);
+      const books = Array.from(this.books.values());
+      for (const book of books) {
+        // Keep the book but remove borrower information
+        this.books.set(book.id, {
+          ...book,
+          borrowed: false,
+          borrowerId: null,
+          borrowDeadline: null
+        });
+      }
+    }
+    
+    // Reset all community memberships
+    if (this.communities && this.communities.size > 0) {
+      console.log(`Preserving ${this.communities.size} communities...`);
+    }
+    
+    // Reset session store
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+    
+    // Reset currentId to ensure no clashes with existing IDs
+    if (!this.currentId) {
+      this.currentId = 1;
+    }
+    
+    console.log("Memory storage reset complete.");
+  }
+  
+  // Full reset for development purposes - not used in production
+  resetEverything(): void {
+    console.log("Performing complete memory storage reset for ALL data...");
+    this.users = new Map();
+    this.books = new Map();
+    this.chats = new Map();
+    this.borrowRequests = new Map();
+    this.communities = new Map();
+    this.communityJoinRequests = new Map();
+    this.communityChats = new Map();
+    this.userReports = new Map();
+    this.currentId = 1;
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+    console.log("Memory storage reset complete.");
+  }
+
+  // Implement new community methods
+  async getCommunities(): Promise<Community[]> {
+    return Array.from(this.communities.values());
+  }
+
+  async getCommunity(id: number): Promise<Community | undefined> {
+    return this.communities.get(id);
+  }
+
+  async createCommunity(insertCommunity: InsertCommunity): Promise<Community> {
+    const id = this.currentId++;
+    const community: Community = {
+      ...insertCommunity,
+      id,
+      description: insertCommunity.description || null,
+      imageUrl: insertCommunity.imageUrl || null,
+      state: insertCommunity.state || null,
+      city: insertCommunity.city || null,
+      createdAt: new Date(),
+    };
+    this.communities.set(id, community);
+    return community;
+  }
+  
+  async updateCommunity(id: number, updates: Partial<Community>): Promise<void> {
+    const community = this.communities.get(id);
+    if (!community) throw new Error("Community not found");
+    const updatedCommunity = { ...community, ...updates };
+    this.communities.set(id, updatedCommunity);
+  }
+
+  async getCommunityMembers(communityId: number): Promise<User[]> {
+    return Array.from(this.users.values()).filter(
+      (user) => user.communityId === communityId
+    );
+  }
+
+  async getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]> {
+    return Array.from(this.communityJoinRequests.values()).filter(
+      (request) => request.communityId === communityId
+    );
+  }
+
+  async createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest> {
+    const id = this.currentId++;
+    const joinRequest: CommunityJoinRequest = {
+      ...request,
+      id,
+      status: "pending",
+      createdAt: new Date(),
+    };
+    this.communityJoinRequests.set(id, joinRequest);
+    return joinRequest;
+  }
+
+  async updateJoinRequest(id: number, status: string): Promise<void> {
+    const request = this.communityJoinRequests.get(id);
+    if (!request) throw new Error("Join request not found");
+    request.status = status;
+    this.communityJoinRequests.set(id, request);
+  }
+
+  async getCommunityChats(communityId: number): Promise<CommunityChat[]> {
+    return Array.from(this.communityChats.values()).filter(
+      (chat) => chat.communityId === communityId
+    );
+  }
+
+  async createCommunityChat(insertChat: InsertCommunityChat): Promise<CommunityChat> {
+    const id = this.currentId++;
+    const chat: CommunityChat = {
+      ...insertChat,
+      id,
+      timestamp: new Date(),
+    };
+    this.communityChats.set(id, chat);
+    return chat;
+  }
+
+  async getBooksByCommunity(communityId: number): Promise<Book[]> {
+    return Array.from(this.books.values()).filter(
+      (book) => book.communityId === communityId
+    );
+  }
+  
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username,
+    );
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email.toLowerCase() === email.toLowerCase(),
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.currentId++;
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      credits: 0, 
+      preferences: null,
+      verified: insertUser.verified || false,
+      verificationCode: insertUser.verificationCode || null,
+      avatar: getRandomAvatar(),
+      communityId: null,
+      state: null,
+      city: null,
+      locationVerified: false
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<void> {
+    const user = await this.getUser(id);
+    if (!user) throw new Error("User not found");
+    const updatedUser = { ...user, ...updates };
+    this.users.set(id, updatedUser);
+  }
+
+  async updateUserCredits(userId: number, credits: number): Promise<void> {
+    const user = await this.getUser(userId);
+    if (!user) throw new Error("User not found");
+    user.credits = credits;
+    this.users.set(userId, user);
+  }
+
+  async updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void> {
+    const user = await this.getUser(userId);
+    if (!user) throw new Error("User not found");
+    user.preferences = preferences;
+    this.users.set(userId, user);
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    this.users.delete(id);
+  }
+
+  async getBooks(): Promise<Book[]> {
+    return Array.from(this.books.values());
+  }
+
+  async getBooksByOwner(ownerId: number): Promise<Book[]> {
+    return Array.from(this.books.values()).filter(
+      (book) => book.ownerId === ownerId,
+    );
+  }
+
+  async getBooksByBorrower(borrowerId: number): Promise<Book[]> {
+    return Array.from(this.books.values()).filter(
+      (book) => book.borrowerId === borrowerId,
+    );
+  }
+
+  async createBook(insertBook: InsertBook): Promise<Book> {
+    const id = this.currentId++;
+    const book: Book = {
+      ...insertBook,
+      id,
+      communityId: insertBook.communityId || 0, // Default to 0 if not provided
+      description: insertBook.description || null,
+      googleBooksId: insertBook.googleBooksId || null,
+      imageUrl: insertBook.imageUrl || null,
+      condition: insertBook.condition || null,
+      borrowed: false,
+      borrowerId: null,
+      borrowDeadline: null,
+      returned: false,
+      donated: false,
+    };
+    this.books.set(id, book);
+    return book;
+  }
+
+  async updateBook(id: number, updates: Partial<Book>): Promise<Book> {
+    const book = this.books.get(id);
+    if (!book) throw new Error("Book not found");
+    const updatedBook = { ...book, ...updates };
+    this.books.set(id, updatedBook);
+    return updatedBook;
+  }
+
+  async deleteBook(id: number): Promise<void> {
+    this.books.delete(id);
+  }
+
+  async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
+    return Array.from(this.borrowRequests.values()).filter(
+      (req) => {
+        const book = this.books.get(req.bookId);
+        return book && (book.ownerId === userId || req.requesterId === userId);
+      }
+    );
+  }
+  
+  async getAllBorrowRequests(): Promise<BorrowRequest[]> {
+    // Return all borrow requests in the system
+    return Array.from(this.borrowRequests.values());
+  }
+
+  async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
+    const id = this.currentId++;
+    const borrowRequest: BorrowRequest = {
+      ...request,
+      id,
+      status: "pending",
+      createdAt: new Date(),
+      requestedReturnDate: request.requestedReturnDate || null,
+    };
+    this.borrowRequests.set(id, borrowRequest);
+    return borrowRequest;
+  }
+
+  async updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void> {
+    const request = this.borrowRequests.get(id);
+    if (!request) throw new Error("Borrow request not found");
+    request.status = status;
+    
+    // Update the return date if provided
+    if (returnDate) {
+      request.requestedReturnDate = returnDate;
+    }
+    
+    this.borrowRequests.set(id, request);
+  }
+
+  async getChats(userId: number): Promise<Chat[]> {
+    return Array.from(this.chats.values()).filter(
+      (chat) => chat.senderId === userId || chat.receiverId === userId,
+    );
+  }
+
+  async createChat(insertChat: InsertChat): Promise<Chat> {
+    const id = this.currentId++;
+    const chat: Chat = {
+      ...insertChat,
+      id,
+      bookId: insertChat.bookId || null,
+      timestamp: new Date(),
+    };
+    this.chats.set(id, chat);
+    return chat;
+  }
+
+  // User Report methods
+  async getUserReports(): Promise<UserReport[]> {
+    return Array.from(this.userReports.values());
+  }
+
+  async getUserReportsByReporter(reporterId: number): Promise<UserReport[]> {
+    return Array.from(this.userReports.values()).filter(
+      (report) => report.reporterId === reporterId
+    );
+  }
+
+  async getUserReportsByReported(reportedUserId: number): Promise<UserReport[]> {
+    return Array.from(this.userReports.values()).filter(
+      (report) => report.reportedUserId === reportedUserId
+    );
+  }
+
+  async createUserReport(report: InsertUserReport): Promise<UserReport> {
+    const id = this.currentId++;
+    const userReport: UserReport = {
+      id,
+      reporterId: report.reporterId,
+      reportedUserId: report.reportedUserId,
+      reportType: report.reportType,
+      description: report.description,
+      bookId: report.bookId || null,
+      chatId: report.chatId || null,
+      status: "pending",
+      createdAt: new Date(),
+      resolvedAt: null,
+    };
+    this.userReports.set(id, userReport);
+    return userReport;
+  }
+
+  async updateUserReportStatus(id: number, status: string): Promise<void> {
+    const report = this.userReports.get(id);
+    if (!report) throw new Error("User report not found");
+    
+    const updates: Partial<UserReport> = { status };
+    // If the status is not pending, we're resolving the report
+    if (status !== "pending") {
+      updates.resolvedAt = new Date();
+    }
+    
+    const updatedReport = { ...report, ...updates };
+    this.userReports.set(id, updatedReport);
+  }
+}
+
+export class DbStorage implements IStorage {
+  sessionStore: any;
+  private isDbConnected: boolean = false;
+  private connectionRetries: number = 0;
+  private maxRetries: number = 5;
+  
+  constructor() {
+    // Initialize the session store
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
+    
+    // Check database connection on startup
+    this.checkConnection();
+    
+    // Set up periodic connection health checks
+    setInterval(() => this.checkConnection(), 60000); // Check every minute
+  }
+  
+  private async checkConnection(): Promise<void> {
+    try {
+      const client = await pool.connect();
+      await client.query('SELECT 1');
+      client.release();
+      
+      if (!this.isDbConnected) {
+        console.log('Database connection established');
+        this.isDbConnected = true;
+        this.connectionRetries = 0;
+      }
+    } catch (error) {
+      this.isDbConnected = false;
+      this.connectionRetries++;
+      
+      console.error(`Database connection check failed (attempt ${this.connectionRetries}/${this.maxRetries}):`, error);
+      
+      if (this.connectionRetries >= this.maxRetries) {
+        console.error('Maximum database connection retries reached. Please check database configuration.');
+      }
+    }
+  }
+
+  async resetAllData(): Promise<void> {
+    // This method is only implemented for compatibility with the IStorage interface
+    // In a production database, we don't want to accidentally delete all data
+    console.log("Reset all data is not supported in DbStorage as it would delete all database records");
+    
+    // For development purposes, provide information about database resets
+    if (process.env.NODE_ENV === 'development') {
+      console.log("To reset data in development, run the migration script with the '--reset' flag");
+    }
+  }
+
+  resetEverything(): void {
+    // This method is only implemented for compatibility with the IStorage interface
+    // In a production database, we don't want to accidentally delete all data
+    console.log("Reset everything is not supported in DbStorage as it would delete all database records");
+    
+    // For development purposes, provide a way to reset the database through a controlled method
+    if (process.env.NODE_ENV === 'development') {
+      console.log("If you need to reset the database in development, run the migration script again");
+    }
+  }
+
+  // User operations
+  async getUsers(): Promise<User[]> {
+    try {
+      return await db.select().from(schema.users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    return await executeDbOperation(
+      async () => {
+        const result = await db.select().from(schema.users).where(eq(schema.users.id, id));
+        return result[0];
+      },
+      `Error fetching user ${id}`
+    ).catch(error => {
+      console.error(`Error fetching user ${id}:`, error);
+      return undefined;
+    });
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(schema.users).where(eq(schema.users.username, username));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching user by username ${username}:`, error);
+      return undefined;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(schema.users).where(eq(schema.users.email, email));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching user by email ${email}:`, error);
+      return undefined;
+    }
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    return await executeDbOperation(
+      async () => {
+        // Fix: Only include properties defined in the insertUserSchema
+        // The schema only includes: username, email, password, verified, verificationCode
+        const result = await db.insert(schema.users).values({
+          username: user.username,
+          email: user.email,
+          password: user.password,
+          verified: user.verified || false,
+          verificationCode: user.verificationCode || null,
+          
+          // Set other default fields not in the InsertUser schema
+          credits: 0,
+          avatar: getRandomAvatar(),
+          // Don't set other fields, let them default to NULL
+        }).returning();
+        
+        return result[0];
+      },
+      "Error creating user"
+    );
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<void> {
+    try {
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<User> = {};
+      
+      if (updates.username !== undefined) dbUpdates.username = updates.username;
+      if (updates.email !== undefined) dbUpdates.email = updates.email;
+      if (updates.password !== undefined) dbUpdates.password = updates.password;
+      if (updates.credits !== undefined) dbUpdates.credits = updates.credits;
+      if (updates.verified !== undefined) dbUpdates.verified = updates.verified;
+      if (updates.verificationCode !== undefined) dbUpdates.verificationCode = updates.verificationCode;
+      if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
+      if (updates.communityId !== undefined) dbUpdates.communityId = updates.communityId;
+      if (updates.state !== undefined) dbUpdates.state = updates.state;
+      if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.locationVerified !== undefined) dbUpdates.locationVerified = updates.locationVerified;
+      if (updates.preferences !== undefined) dbUpdates.preferences = updates.preferences;
+      
+      // Only update if there are changes to make
+      if (Object.keys(dbUpdates).length > 0) {
+        await db.update(schema.users)
+          .set(dbUpdates)
+          .where(eq(schema.users.id, id));
+      }
+    } catch (error) {
+      console.error(`Error updating user ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async updateUserCredits(userId: number, credits: number): Promise<void> {
+    try {
+      await db.update(schema.users)
+        .set({ credits })
+        .where(eq(schema.users.id, userId));
+    } catch (error) {
+      console.error(`Error updating credits for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  async updateUserPreferences(userId: number, preferences: UserPreferences): Promise<void> {
+    try {
+      await db.update(schema.users)
+        .set({ preferences })
+        .where(eq(schema.users.id, userId));
+    } catch (error) {
+      console.error(`Error updating preferences for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    try {
+      await db.delete(schema.users)
+        .where(eq(schema.users.id, id));
+    } catch (error) {
+      console.error(`Error deleting user ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // User reports
+  async getUserReports(): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports);
+    } catch (error) {
+      console.error("Error fetching user reports:", error);
+      return [];
+    }
+  }
+
+  async getUserReportsByReporter(reporterId: number): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports).where(eq(schema.userReports.reporterId, reporterId));
+    } catch (error) {
+      console.error(`Error fetching reports by reporter ${reporterId}:`, error);
+      return [];
+    }
+  }
+
+  async getUserReportsByReported(reportedUserId: number): Promise<UserReport[]> {
+    try {
+      return await db.select().from(schema.userReports).where(eq(schema.userReports.reportedUserId, reportedUserId));
+    } catch (error) {
+      console.error(`Error fetching reports for reported user ${reportedUserId}:`, error);
+      return [];
+    }
+  }
+
+  async createUserReport(report: InsertUserReport): Promise<UserReport> {
+    try {
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.userReports).values({
+        reporterId: report.reporterId,
+        reportedUserId: report.reportedUserId,
+        reportType: report.reportType,
+        description: report.description,
+        bookId: report.bookId,
+        chatId: report.chatId,
+        status: 'pending'
+        // createdAt is handled by the database default
+      }).returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating user report:", error);
+      throw error;
+    }
+  }
+
+  async updateUserReportStatus(id: number, status: string): Promise<void> {
+    try {
+      // Fix: Use camelCase property names to match the TypeScript schema
+      await db.update(schema.userReports)
+        .set({ 
+          status,
+          resolvedAt: status !== 'pending' ? new Date() : undefined
+        })
+        .where(eq(schema.userReports.id, id));
+    } catch (error) {
+      console.error(`Error updating report status ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Book operations
+  async getBooks(): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books);
+    } catch (error) {
+      console.error("Error fetching books:", error);
+      return [];
+    }
+  }
+
+  async getBooksByOwner(ownerId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.ownerId, ownerId));
+    } catch (error) {
+      console.error(`Error fetching books by owner ${ownerId}:`, error);
+      return [];
+    }
+  }
+
+  async getBooksByBorrower(borrowerId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.borrowerId, borrowerId));
+    } catch (error) {
+      console.error(`Error fetching books by borrower ${borrowerId}:`, error);
+      return [];
+    }
+  }
+
+  async getBooksByCommunity(communityId: number): Promise<Book[]> {
+    try {
+      return await db.select().from(schema.books).where(eq(schema.books.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching books by community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createBook(book: InsertBook): Promise<Book> {
+    try {
+      // Fix: Handle optional communityId in InsertBook schema
+      const bookValues: any = {
+        title: book.title,
+        author: book.author,
+        description: book.description || null, // Handle optional description
+        googleBooksId: book.googleBooksId || null, // Handle optional googleBooksId
+        ownerId: book.ownerId,
+        condition: book.condition || null, // Handle optional condition
+        genre: book.genre,
+        imageUrl: book.imageUrl || null, // Handle optional imageUrl
+        unlisted: book.unlisted || false // Default to false if not provided
+      };
+      
+      // communityId is optional in the InsertBook schema, but required in the database
+      // If not provided, set it to a default value (e.g., 1 for general community)
+      if (book.communityId !== undefined) {
+        bookValues.communityId = book.communityId;
+      } else {
+        bookValues.communityId = 1; // Default community ID if none provided
+      }
+      
+      const result = await db.insert(schema.books).values(bookValues).returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating book:", error);
+      throw error;
+    }
+  }
+
+  async updateBook(id: number, updates: Partial<Book>): Promise<Book> {
+    try {
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<Book> = {};
+      
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.author !== undefined) dbUpdates.author = updates.author;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.googleBooksId !== undefined) dbUpdates.googleBooksId = updates.googleBooksId;
+      if (updates.ownerId !== undefined) dbUpdates.ownerId = updates.ownerId;
+      if (updates.communityId !== undefined) dbUpdates.communityId = updates.communityId;
+      if (updates.borrowed !== undefined) dbUpdates.borrowed = updates.borrowed;
+      if (updates.borrowerId !== undefined) dbUpdates.borrowerId = updates.borrowerId;
+      if (updates.borrowDeadline !== undefined) dbUpdates.borrowDeadline = updates.borrowDeadline;
+      if (updates.returned !== undefined) dbUpdates.returned = updates.returned;
+      if (updates.condition !== undefined) dbUpdates.condition = updates.condition;
+      if (updates.genre !== undefined) dbUpdates.genre = updates.genre;
+      if (updates.imageUrl !== undefined) dbUpdates.imageUrl = updates.imageUrl;
+      if (updates.donated !== undefined) dbUpdates.donated = updates.donated;
+      if (updates.unlisted !== undefined) dbUpdates.unlisted = updates.unlisted;
+      
+      const result = await db.update(schema.books).set(dbUpdates).where(eq(schema.books.id, id)).returning();
+      return result[0];
+    } catch (error) {
+      console.error(`Error updating book ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteBook(id: number): Promise<void> {
+    try {
+      await db.delete(schema.books)
+        .where(eq(schema.books.id, id));
+    } catch (error) {
+      console.error(`Error deleting book ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Community operations
+  async getCommunities(): Promise<Community[]> {
+    try {
+      return await db.select().from(schema.communities);
+    } catch (error) {
+      console.error("Error fetching communities:", error);
+      return [];
+    }
+  }
+
+  async getCommunity(id: number): Promise<Community | undefined> {
+    try {
+      const result = await db.select().from(schema.communities).where(eq(schema.communities.id, id));
+      return result[0];
+    } catch (error) {
+      console.error(`Error fetching community ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createCommunity(community: InsertCommunity): Promise<Community> {
+    try {
+      console.log("Creating community:", community);
+      
+      // Fix the property names to match the TypeScript schema definition 
+      // rather than the database column names
+      const result = await db.insert(schema.communities).values({
+        name: community.name,
+        description: community.description,
+        location: community.location,
+        state: community.state,
+        city: community.city,
+        imageUrl: community.imageUrl,
+        isPublic: community.isPublic,
+        createdBy: community.createdBy
+        // createdAt is handled by the database default
+      }).returning();
+      
+      console.log("Community created successfully:", result[0]);
+      return result[0];
+    } catch (error) {
+      console.error("Error creating community:", error);
+      throw new Error(`Failed to create community: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateCommunity(id: number, updates: Partial<Community>): Promise<void> {
+    try {
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const dbUpdates: Partial<Community> = {};
+      
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.location !== undefined) dbUpdates.location = updates.location;
+      if (updates.state !== undefined) dbUpdates.state = updates.state;
+      if (updates.city !== undefined) dbUpdates.city = updates.city;
+      if (updates.imageUrl !== undefined) dbUpdates.imageUrl = updates.imageUrl;
+      if (updates.isPublic !== undefined) dbUpdates.isPublic = updates.isPublic;
+      if (updates.createdAt !== undefined) dbUpdates.createdAt = updates.createdAt;
+      if (updates.createdBy !== undefined) dbUpdates.createdBy = updates.createdBy;
+      
+      // Only update if there are changes to make
+      if (Object.keys(dbUpdates).length > 0) {
+        await db.update(schema.communities)
+          .set(dbUpdates)
+          .where(eq(schema.communities.id, id));
+      }
+    } catch (error) {
+      console.error(`Error updating community ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async getCommunityMembers(communityId: number): Promise<User[]> {
+    try {
+      return await db.select().from(schema.users).where(eq(schema.users.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching community members for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  // Community join requests
+  async getJoinRequests(communityId: number): Promise<CommunityJoinRequest[]> {
+    try {
+      return await db.select().from(schema.communityJoinRequests).where(eq(schema.communityJoinRequests.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching join requests for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createJoinRequest(request: InsertCommunityJoinRequest): Promise<CommunityJoinRequest> {
+    try {
+      console.log("Creating join request:", request);
+      
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.communityJoinRequests).values({
+        userId: request.userId,
+        communityId: request.communityId,
+        status: 'pending' // Status is set by the database default
+        // createdAt is handled by the database default
+      }).returning();
+      
+      console.log("Join request created successfully:", result[0]);
+      return result[0];
+    } catch (error) {
+      console.error("Error creating join request:", error);
+      throw new Error(`Failed to create join request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateJoinRequest(id: number, status: string): Promise<void> {
+    try {
+      await db.update(schema.communityJoinRequests)
+        .set({ status })
+        .where(eq(schema.communityJoinRequests.id, id));
+    } catch (error) {
+      console.error(`Error updating join request ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Community chat
+  async getCommunityChats(communityId: number): Promise<CommunityChat[]> {
+    try {
+      return await db.select().from(schema.communityChats).where(eq(schema.communityChats.communityId, communityId));
+    } catch (error) {
+      console.error(`Error fetching chats for community ${communityId}:`, error);
+      return [];
+    }
+  }
+
+  async createCommunityChat(chat: InsertCommunityChat): Promise<CommunityChat> {
+    try {
+      console.log("Creating community chat:", chat);
+      
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.communityChats).values({
+        communityId: chat.communityId,
+        userId: chat.userId,
+        message: chat.message
+        // timestamp is handled by the database default
+      }).returning();
+      
+      console.log("Community chat created successfully:", result[0]);
+      return result[0];
+    } catch (error) {
+      console.error("Error creating community chat:", error);
+      throw new Error(`Failed to create community chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Borrow requests
+  async getBorrowRequests(userId: number): Promise<BorrowRequest[]> {
+    try {
+      // First, get requests where user is the requester
+      const requesterRequests = await db.select()
+        .from(schema.borrowRequests)
+        .where(eq(schema.borrowRequests.requesterId, userId));
+      
+      // Then, get the books owned by this user
+      const ownedBooks = await db.select().from(schema.books)
+        .where(eq(schema.books.ownerId, userId));
+      
+      if (ownedBooks.length === 0) {
+        return requesterRequests;
+      }
+      
+      // Get the book IDs owned by this user
+      const ownedBookIds = ownedBooks.map(book => book.id);
+      
+      // Get all borrow requests and filter for those related to user's books
+      const allRequests = await db.select().from(schema.borrowRequests);
+      
+      // Filter requests for books owned by this user
+      const ownerRequests = allRequests.filter(req => ownedBookIds.includes(req.bookId));
+      
+      // Combine the two sets of requests (removing duplicates)
+      const combinedRequests = [...requesterRequests];
+      
+      for (const req of ownerRequests) {
+        if (!combinedRequests.some(r => r.id === req.id)) {
+          combinedRequests.push(req);
+        }
+      }
+      
+      return combinedRequests;
+    } catch (error) {
+      console.error(`Error fetching borrow requests for user ${userId}:`, error);
+      return [];
+    }
+  }
+  
+  async getAllBorrowRequests(): Promise<BorrowRequest[]> {
+    try {
+      // Get all borrow requests from the database
+      return await db.select().from(schema.borrowRequests);
+    } catch (error) {
+      console.error("Error fetching all borrow requests:", error);
+      return [];
+    }
+  }
+
+  async createBorrowRequest(request: InsertBorrowRequest): Promise<BorrowRequest> {
+    try {
+      console.log("Creating borrow request:", request);
+      
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.borrowRequests).values({
+        bookId: request.bookId,
+        requesterId: request.requesterId,
+        status: 'pending', // Default status
+        requestedReturnDate: request.requestedReturnDate
+        // createdAt is handled by the database default
+      }).returning();
+      
+      console.log("Borrow request created successfully:", result[0]);
+      return result[0];
+    } catch (error) {
+      console.error("Error creating borrow request:", error);
+      throw new Error(`Failed to create borrow request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateBorrowRequest(id: number, status: string, returnDate?: Date): Promise<void> {
+    try {
+      // Create update object with status
+      const updates: any = { status };
+      
+      // Add return date if provided
+      if (returnDate) {
+        updates.requestedReturnDate = returnDate;
+      }
+      
+      // Update the borrow request with new status and optional return date
+      await db.update(schema.borrowRequests)
+        .set(updates)
+        .where(eq(schema.borrowRequests.id, id));
+        
+      console.log(`Updated borrow request ${id} to status: ${status}${returnDate ? `, return date: ${returnDate}` : ''}`);
+    } catch (error) {
+      console.error(`Error updating borrow request ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Chat operations
+  async getChats(userId: number): Promise<Chat[]> {
+    try {
+      // Get chats where the user is either the sender or receiver
+      const sentChats = await db.select().from(schema.chats).where(eq(schema.chats.senderId, userId));
+      const receivedChats = await db.select().from(schema.chats).where(eq(schema.chats.receiverId, userId));
+      return [...sentChats, ...receivedChats];
+    } catch (error) {
+      console.error(`Error fetching chats for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  async createChat(chat: InsertChat): Promise<Chat> {
+    try {
+      console.log("Creating chat:", chat);
+      
+      // Fix: Use camelCase property names to match the TypeScript schema
+      const result = await db.insert(schema.chats).values({
+        senderId: chat.senderId,
+        receiverId: chat.receiverId,
+        message: chat.message,
+        bookId: chat.bookId
+        // timestamp is handled by the database default
+      }).returning();
+      
+      console.log("Chat created successfully:", result[0]);
+      return result[0];
+    } catch (error) {
+      console.error("Error creating chat:", error);
+      throw new Error(`Failed to create chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // No need for getter as sessionStore is already public
+}
+
+// Use DbStorage for persistent storage with database
+export const storage = new DbStorage();
