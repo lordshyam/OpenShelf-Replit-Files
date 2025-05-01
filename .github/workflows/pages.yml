@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository (no submodules)
         uses: actions/checkout@v4
         with:
-          submodules: false    # ← skip any submodules so it won’t try ‘OpenShelf’
+          submodules: false
           fetch-depth: 0
 
       - name: Deploy to GitHub Pages
@@ -21,7 +21,7 @@ jobs:
       - name: Upload files
         uses: actions/upload-pages-artifact@v1
         with:
-          path: .             # “.” means upload everything in the root (where index.html lives)
+          path: .    # upload everything at the repo root, including index.html
 
       - name: Deploy
         uses: actions/deploy-pages@v1
